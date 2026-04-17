@@ -18,10 +18,12 @@ export default function SwapAnimOverlay({ first, second }) {
   const dy = second.rect.top  - first.rect.top;
 
   function ghostStyle(isFirst) {
+    const vvTop  = window.visualViewport?.offsetTop  ?? 0;
+    const vvLeft = window.visualViewport?.offsetLeft ?? 0;
     return {
       position: 'fixed',
-      left: isFirst ? first.rect.left : second.rect.left,
-      top:  isFirst ? first.rect.top  : second.rect.top,
+      left: (isFirst ? first.rect.left : second.rect.left) - vvLeft,
+      top:  (isFirst ? first.rect.top  : second.rect.top)  - vvTop,
       width:  first.rect.width  || 72,
       height: first.rect.height || 100,
       pointerEvents: 'none',

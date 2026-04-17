@@ -20,8 +20,8 @@ export default function GiveCardAnim({ from, to }) {
     <div style={{ position: 'fixed', inset: 0, pointerEvents: 'none', zIndex: 499 }}>
       <div style={{
         position: 'fixed',
-        left:   from.rect.left,
-        top:    from.rect.top,
+        left:   from.rect.left - (window.visualViewport?.offsetLeft ?? 0),
+        top:    from.rect.top  - (window.visualViewport?.offsetTop  ?? 0),
         width:  from.rect.width  || 72,
         height: from.rect.height || 100,
         pointerEvents: 'none',

@@ -726,7 +726,7 @@ button:disabled { opacity: .4; cursor: not-allowed; transform: none; }
   display: flex;
   flex-direction: column;
   height: 100vh;
-  overflow: hidden;
+  overflow: clip; /* clip instead of hidden — hidden breaks position:fixed on iOS Safari */
   background: var(--bg);
 }
 
@@ -897,7 +897,7 @@ button:disabled { opacity: .4; cursor: not-allowed; transform: none; }
   align-items: center;
   justify-content: center;
   z-index: 250;
-  pointer-events: none;
+  pointer-events: all; /* must be all so tap-outside-to-dismiss works on mobile */
 }
 .peek-reveal-popup {
   pointer-events: all;
@@ -967,8 +967,11 @@ button:disabled { opacity: .4; cursor: not-allowed; transform: none; }
   cursor: pointer;
   border-radius: 10px;
   transition: box-shadow .15s;
+  touch-action: manipulation; /* kills 300ms tap delay + double-tap zoom */
+  -webkit-tap-highlight-color: transparent;
 }
-.card-slot-target:hover .card {
+.card-slot-target:hover .card,
+.card-slot-target:active .card {
   transform: translateY(-6px);
   box-shadow: 0 0 0 2px var(--accent2), 0 8px 20px rgba(63,185,80,.35);
 }
@@ -1045,8 +1048,9 @@ button:disabled { opacity: .4; cursor: not-allowed; transform: none; }
   user-select: none;
   transition: transform .15s, box-shadow .15s, outline .15s;
 }
-.card-clickable { cursor: pointer; }
-.card-clickable:hover { transform: translateY(-8px); box-shadow: 0 8px 20px rgba(0,0,0,.45); }
+.card-clickable { cursor: pointer; touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
+.card-clickable:hover,
+.card-clickable:active { transform: translateY(-8px); box-shadow: 0 8px 20px rgba(0,0,0,.45); }
 .card-selected {
   transform: translateY(-12px) !important;
   box-shadow: 0 0 0 2px var(--accent), 0 12px 28px rgba(240,165,0,.35) !important;
