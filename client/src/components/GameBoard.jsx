@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { flushSync } from 'react-dom';
 import socket from '../socket';
 import Card from './Card';
 import PlayerCardGrid from './PlayerCardGrid';
@@ -191,8 +192,6 @@ export default function GameBoard({ gameState, myId, onError, onLeave, currentUs
   const [peekReveal, setPeekReveal] = useState(null); // { card, ownerName }
   const [peekRevealExpiresAt, setPeekRevealExpiresAt] = useState(null);
   const peekRevealSecs = useCountdown(peekRevealExpiresAt);
-  const prevPeekedCountRef = useRef(0);
-  const prevPowerPlayerIdRef = useRef(null);
 
   // Deal animation — shown once on lobby→peek transition
   const [showDeal, setShowDeal] = useState(false);
@@ -313,33 +312,40 @@ export default function GameBoard({ gameState, myId, onError, onLeave, currentUs
     }
   }, [peekRevealSecs, peekRevealExpiresAt]);
 
-  // Detect a newly peeked card and show it prominently
+  // Detect a newly peeked card via raw socket events — bypasses React 18 batching.
+  // For single-use peek powers (7/8/9/10) the server closes the power window immediately
+  // after the peek, so two game-state events arrive nearly simultaneously. React batches
+  // them into one render, skipping the intermediate state that contains the peeked card.
+  // Listening on the socket directly ensures we see every event; flushSync commits the
+  // peek reveal before the second (window-closed) event's state update is processed.
   useEffect(() => {
-    const pw = gameState?.powerWindow;
-    if (!pw) {
-      prevPeekedCountRef.current = 0;
-      prevPowerPlayerIdRef.current = null;
-      return;
-    }
-    // Reset counter when a different player's power starts
-    if (pw.playerId !== prevPowerPlayerIdRef.current) {
-      prevPeekedCountRef.current = 0;
-      prevPowerPlayerIdRef.current = pw.playerId;
-    }
-    const peekedCards = pw.peekedCards ?? [];
-    if (pw.playerId === myId && pw.phase === 'action' && peekedCards.length > prevPeekedCountRef.current) {
-      const newest = peekedCards[peekedCards.length - 1];
-      const owner = gameState.players.find((p) => p.id === newest.ownerId);
-      const slot = owner?.grid?.find((s) => s.position === newest.position);
-      if (slot?.card) {
-        const ownerName = owner.id === myId ? 'your own card' : `${owner.name}'s card`;
-        setPeekReveal({ card: slot.card, ownerName });
-        setPeekRevealExpiresAt(Date.now() + 5000);
+    let lastCount    = 0;
+    let lastPlayerId = null;
+
+    const handler = (state) => {
+      const pw = state?.powerWindow;
+      if (!pw) { lastCount = 0; lastPlayerId = null; return; }
+      if (pw.playerId !== lastPlayerId) { lastCount = 0; lastPlayerId = pw.playerId; }
+
+      const peeked = pw.peekedCards ?? [];
+      if (pw.playerId === myId && pw.phase === 'action' && peeked.length > lastCount) {
+        const newest   = peeked[peeked.length - 1];
+        const owner    = state.players?.find((p) => p.id === newest.ownerId);
+        const slot     = owner?.grid?.find((s) => s.position === newest.position);
+        if (slot?.card) {
+          const ownerName = owner.id === myId ? 'your own card' : `${owner.name}'s card`;
+          flushSync(() => {
+            setPeekReveal({ card: slot.card, ownerName });
+            setPeekRevealExpiresAt(Date.now() + 5000);
+          });
+        }
       }
-    }
-    prevPeekedCountRef.current = peekedCards.length;
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [gameState?.powerWindow?.peekedCards?.length, gameState?.powerWindow?.playerId]);
+      lastCount = peeked.length;
+    };
+
+    socket.on('game-state', handler);
+    return () => socket.off('game-state', handler);
+  }, [myId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!gameState) return <div className="loading">Loading game…</div>;
 
