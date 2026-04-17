@@ -20,7 +20,7 @@ const TYPE_ICON = {
 };
 
 export default function GameLog({ logs }) {
-  const [open, setOpen] = useState(true);
+  const [open, setOpen] = useState(false);
   const listRef = useRef(null);
   const prevLenRef = useRef(0);
   const [unread, setUnread] = useState(0);
@@ -51,7 +51,7 @@ export default function GameLog({ logs }) {
     <div className={`game-log-panel${open ? ' game-log-open' : ''}`}>
       <button className="game-log-toggle" onClick={() => setOpen(o => !o)}>
         <span className="game-log-chevron">{open ? '▾' : '▸'}</span>
-        <span className="game-log-title">Game Log</span>
+        <span className="game-log-title">Log</span>
         {!open && unread > 0 && (
           <span className="game-log-badge">{unread > 99 ? '99+' : unread}</span>
         )}

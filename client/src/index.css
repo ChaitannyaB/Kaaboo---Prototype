@@ -624,30 +624,52 @@ button:disabled { opacity: .4; cursor: not-allowed; transform: none; }
   position: fixed;
   bottom: 16px;
   left: 16px;
-  width: 256px;
   z-index: 200;
+  font-size: 12px;
+  /* Closed: just the pill button, no background/border */
+}
+.game-log-open {
+  width: 256px;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 10px;
   overflow: hidden;
   box-shadow: 0 4px 24px rgba(0,0,0,.45);
-  font-size: 12px;
 }
+
+/* Closed state: compact pill */
 .game-log-toggle {
-  width: 100%;
   background: var(--surface2);
-  border: none;
-  padding: 7px 12px;
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  padding: 5px 12px;
   display: flex;
   align-items: center;
   gap: 6px;
   cursor: pointer;
-  color: var(--text);
-  font-size: 12px;
+  color: var(--text-muted);
+  font-size: 11px;
   font-weight: 600;
   user-select: none;
+  white-space: nowrap;
+  box-shadow: 0 2px 8px rgba(0,0,0,.3);
+  transition: background .15s, color .15s;
 }
-.game-log-toggle:hover { background: #2a3040; }
+.game-log-toggle:hover { background: #2a3040; color: var(--text); }
+
+/* Open state: toggle becomes a flat full-width header */
+.game-log-open .game-log-toggle {
+  width: 100%;
+  border-radius: 0;
+  border: none;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface2);
+  color: var(--text);
+  padding: 7px 12px;
+  box-shadow: none;
+}
+.game-log-open .game-log-toggle:hover { background: #2a3040; }
+
 .game-log-chevron { font-size: 10px; opacity: .7; }
 .game-log-title   { flex: 1; text-align: left; }
 .game-log-count   { font-size: 11px; color: var(--text-muted); }
