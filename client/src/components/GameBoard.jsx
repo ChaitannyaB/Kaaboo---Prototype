@@ -205,6 +205,7 @@ export default function GameBoard({ gameState, myId, onError, onLeave, currentUs
   const prevStateRef = useRef(null);
   const [swapAnim, setSwapAnim] = useState(null);
   const [giveAnim, setGiveAnim] = useState(null);         // { from:{rect,card}, to:{rect} }
+  const [replaceAnim, setReplaceAnim] = useState(null);   // { from:{rect,card}, to:{rect} }
   const [penaltySlots, setPenaltySlots] = useState([]);   // [{ playerId, position }]
   const [logs, setLogs] = useState([]);
   const logIdRef = useRef(0);
@@ -270,6 +271,48 @@ export default function GameBoard({ gameState, myId, onError, onLeave, currentUs
         if (srcEl && dstEl) {
           setGiveAnim({ from: { rect: srcEl.getBoundingClientRect(), card: givenCard }, to: { rect: dstEl.getBoundingClientRect() } });
           setTimeout(() => setGiveAnim(null), 1100);
+        }
+      }
+    }
+
+    // ── Replace animation (drawn card → grid slot) ──────────────────────────
+    const prevHand = prev?.myHand ?? [];
+    const currHand = gameState.myHand ?? [];
+    if (prevHand.length > 0 && currHand.length === 0) {
+      const drawnCard = prevHand[0];
+      const myPrevGrid = prev.players?.find(p => p.id === myId)?.grid ?? [];
+      const myCurrGrid = gameState.players?.find(p => p.id === myId)?.grid ?? [];
+      const changedSlot = myCurrGrid.find(s => {
+        const old = myPrevGrid.find(ps => ps.position === s.position);
+        return s.card && old?.card?.rank !== s.card?.rank;
+      });
+      if (changedSlot) {
+        const fromEl = document.querySelector('.drawn-card-area');
+        const toEl   = document.querySelector(`[data-player="${myId}"][data-slot="${changedSlot.position}"]`);
+        if (fromEl && toEl) {
+          setReplaceAnim({ from: { rect: fromEl.getBoundingClientRect(), card: drawnCard }, to: { rect: toEl.getBoundingClientRect() } });
+          setTimeout(() => setReplaceAnim(null), 550);
+        }
+      }
+    }
+
+    // ── Playdown animation (grid slot → discard pile) ────────────────────────
+    const wasOpen    = prev?.playdownWindow && !prev.playdownWindow.claimed;
+    const nowClaimed = gameState.playdownWindow?.claimed || (!gameState.playdownWindow && wasOpen);
+    if (wasOpen && nowClaimed) {
+      for (const currP of gameState.players) {
+        const prevP = prev.players?.find(p => p.id === currP.id);
+        const lostSlot = prevP?.grid?.find(ps =>
+          ps.card && !currP.grid.find(s => s.position === ps.position)?.card
+        );
+        if (lostSlot) {
+          const fromEl = document.querySelector(`[data-player="${currP.id}"][data-slot="${lostSlot.position}"]`);
+          const toEl   = document.querySelector('.discard-pile');
+          if (fromEl && toEl) {
+            setReplaceAnim({ from: { rect: fromEl.getBoundingClientRect(), card: lostSlot.card }, to: { rect: toEl.getBoundingClientRect() } });
+            setTimeout(() => setReplaceAnim(null), 550);
+          }
+          break;
         }
       }
     }
@@ -649,7 +692,9 @@ export default function GameBoard({ gameState, myId, onError, onLeave, currentUs
         <div className="pile-container">
           <div className="pile-label">Discard</div>
           <div className="discard-pile">
-            {topDiscard ? <Card card={topDiscard} /> : <div className="empty-pile">Empty</div>}
+            {topDiscard
+              ? <Card key={`${topDiscard.rank}-${topDiscard.suit}`} card={topDiscard} />
+              : <div className="empty-pile">Empty</div>}
           </div>
         </div>
       </div>
@@ -737,6 +782,9 @@ export default function GameBoard({ gameState, myId, onError, onLeave, currentUs
       {/* ── Give-card animation overlay ───────────────────────────────────── */}
       {giveAnim && (
         <GiveCardAnim from={giveAnim.from} to={giveAnim.to} />
+      )}
+      {replaceAnim && (
+        <GiveCardAnim from={replaceAnim.from} to={replaceAnim.to} />
       )}
 
       {/* ── Peek reveal overlay ──────────────────────────────────────────── */}
