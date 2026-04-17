@@ -1014,7 +1014,13 @@ button:disabled { opacity: .4; cursor: not-allowed; transform: none; }
 
 /* ── Card Grid ─────────────────────────────────────────────────────────────── */
 /* Wrapper for each slot — handles click target and hover glow when selectable */
-.card-slot-wrap { display: contents; }
+.card-slot-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--card-w);
+  height: var(--card-h);
+}
 .card-slot-target {
   display: flex;
   align-items: center;

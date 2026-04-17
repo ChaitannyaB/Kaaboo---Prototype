@@ -306,7 +306,9 @@ export default function GameBoard({ gameState, myId, onError, onLeave, currentUs
 
   // Auto-hide peek reveal when countdown reaches zero
   useEffect(() => {
-    if (peekRevealSecs === 0 && peekRevealExpiresAt !== null) {
+    // Guard: only clear when the timer has truly expired, not when secs hasn't
+    // initialised yet (useState(0) starts at 0 before the countdown effect fires).
+    if (peekRevealSecs === 0 && peekRevealExpiresAt !== null && Date.now() >= peekRevealExpiresAt) {
       setPeekReveal(null);
       setPeekRevealExpiresAt(null);
     }
