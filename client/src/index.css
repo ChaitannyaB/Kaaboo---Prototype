@@ -721,6 +721,61 @@ button:disabled { opacity: .4; cursor: not-allowed; transform: none; }
 .game-log-peek        { color: #c084fc; }
 .game-log-give        { color: #60a5fa; }
 
+/* ── Deal animation ────────────────────────────────────────────────────────── */
+.deal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 700;
+  background: rgba(13, 17, 23, 0.96);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  transition: opacity 0.38s ease;
+}
+.deal-overlay-out { opacity: 0; }
+
+.deal-deck {
+  position: relative;
+  width: 52px;
+  height: 72px;
+}
+.deal-deck-card {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(145deg, #16306b, #0b1d42);
+  border: 1px solid #2a4a8e;
+  border-radius: 6px;
+}
+
+@keyframes deal-fly {
+  0%   { opacity: 0;   transform: translate(-50%, -50%) scale(1.05); }
+  8%   { opacity: 1;   transform: translate(-50%, -50%) scale(1); }
+  100% { opacity: 0.55; transform: translate(calc(-50% + var(--deal-tx)), calc(-50% + var(--deal-ty))) scale(0.68); }
+}
+.deal-card {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 44px;
+  height: 62px;
+  background: linear-gradient(145deg, #16306b, #0b1d42);
+  border: 1px solid #3a5aae;
+  border-radius: 6px;
+  opacity: 0;
+  animation: deal-fly cubic-bezier(0.22, 0, 0.36, 1) forwards;
+  will-change: transform, opacity;
+}
+
+.deal-label {
+  position: absolute;
+  bottom: 18%;
+  font-size: 13px;
+  color: rgba(230, 237, 243, 0.4);
+  letter-spacing: 0.06em;
+  pointer-events: none;
+}
+
 /* ── Game Board Layout ─────────────────────────────────────────────────────── */
 .gameboard {
   display: flex;

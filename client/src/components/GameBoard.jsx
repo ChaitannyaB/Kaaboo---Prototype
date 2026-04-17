@@ -9,6 +9,7 @@ import ChatPanel from './ChatPanel';
 import SwapAnimOverlay from './SwapAnimOverlay';
 import GiveCardAnim from './GiveCardAnim';
 import GameLog from './GameLog';
+import DealAnimation from './DealAnimation';
 
 // ── Game event log detection ───────────────────────────────────────────────────
 function detectGameEvents(prev, cur, myId) {
@@ -192,6 +193,14 @@ export default function GameBoard({ gameState, myId, onError, onLeave, currentUs
   const peekRevealSecs = useCountdown(peekRevealExpiresAt);
   const prevPeekedCountRef = useRef(0);
   const prevPowerPlayerIdRef = useRef(null);
+
+  // Deal animation — shown once on lobby→peek transition
+  const [showDeal, setShowDeal] = useState(false);
+  const prevPhaseRef = useRef(null);
+  useEffect(() => {
+    if (prevPhaseRef.current === 'lobby' && gameState?.phase === 'peek') setShowDeal(true);
+    prevPhaseRef.current = gameState?.phase ?? null;
+  }, [gameState?.phase]);
 
   // Swap animation + game log — share one "previous state" ref
   const prevStateRef = useRef(null);
@@ -737,6 +746,14 @@ export default function GameBoard({ gameState, myId, onError, onLeave, currentUs
             <div className="peek-reveal-dismiss">tap to dismiss</div>
           </div>
         </div>
+      )}
+
+      {/* ── Deal animation ───────────────────────────────────────────────── */}
+      {showDeal && (
+        <DealAnimation
+          playerCount={players.length}
+          onDone={() => setShowDeal(false)}
+        />
       )}
 
       {/* ── End-game overlay ─────────────────────────────────────────────── */}
