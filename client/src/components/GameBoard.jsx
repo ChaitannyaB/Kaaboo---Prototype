@@ -197,7 +197,7 @@ export default function GameBoard({ gameState, myId, onError, onLeave, currentUs
   const [showDeal, setShowDeal] = useState(false);
   const prevPhaseRef = useRef(null);
   useEffect(() => {
-    if (prevPhaseRef.current === 'lobby' && gameState?.phase === 'peek') setShowDeal(true);
+    if (prevPhaseRef.current === null && gameState?.phase === 'dealing') setShowDeal(true);
     prevPhaseRef.current = gameState?.phase ?? null;
   }, [gameState?.phase]);
 

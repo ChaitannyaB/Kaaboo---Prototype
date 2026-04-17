@@ -138,9 +138,14 @@ export class GameRoom {
 
     this.turnOrder = shuffle(this.players.map((p) => p.id));
     this.currentTurnIndex = 0;
+    this.phase = 'dealing';
+    return { ok: true };
+  }
+
+  startPeek() {
+    if (this.phase !== 'dealing') return;
     this.phase = 'peek';
     this.peekEndsAt = Date.now() + PEEK_DURATION_MS;
-    return { ok: true };
   }
 
   endPeek() {

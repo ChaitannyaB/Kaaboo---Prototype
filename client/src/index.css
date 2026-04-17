@@ -726,19 +726,19 @@ button:disabled { opacity: .4; cursor: not-allowed; transform: none; }
   position: fixed;
   inset: 0;
   z-index: 700;
-  background: rgba(13, 17, 23, 0.96);
+  background: rgba(13, 17, 23, 0.88);
   display: flex;
   align-items: center;
   justify-content: center;
   pointer-events: none;
-  transition: opacity 0.38s ease;
+  transition: opacity 0.22s ease;
 }
 .deal-overlay-out { opacity: 0; }
 
 .deal-deck {
   position: relative;
-  width: 52px;
-  height: 72px;
+  width: 64px;
+  height: 84px;
 }
 .deal-deck-card {
   position: absolute;
@@ -757,11 +757,12 @@ button:disabled { opacity: .4; cursor: not-allowed; transform: none; }
   position: absolute;
   left: 50%;
   top: 50%;
-  width: 44px;
-  height: 62px;
+  width: 56px;
+  height: 78px;
   background: linear-gradient(145deg, #16306b, #0b1d42);
-  border: 1px solid #3a5aae;
+  border: 1px solid #5a7aff;
   border-radius: 6px;
+  box-shadow: 0 0 6px rgba(90, 122, 255, 0.5);
   opacity: 0;
   animation: deal-fly cubic-bezier(0.22, 0, 0.36, 1) forwards;
   will-change: transform, opacity;

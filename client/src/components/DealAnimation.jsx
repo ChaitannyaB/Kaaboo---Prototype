@@ -10,8 +10,8 @@ const OPPONENT_POSITIONS = {
 };
 const MY_POS       = { tx: '0vw', ty: '22vh' };
 const CARDS_EACH   = 4;
-const INTERVAL_MS  = 75;  // ms between each dealt card
-const FLY_MS       = 420; // flight duration
+const INTERVAL_MS  = 55;  // ms between each dealt card
+const FLY_MS       = 320; // flight duration
 
 export default function DealAnimation({ playerCount, onDone }) {
   const [out, setOut] = useState(false);
@@ -32,11 +32,11 @@ export default function DealAnimation({ playerCount, onDone }) {
   }, [playerCount]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const lastDelay = cards.at(-1)?.delay ?? 0;
-  const holdMs    = lastDelay + FLY_MS + 150; // wait until last card lands + brief pause
+  const holdMs    = lastDelay + FLY_MS + 80; // wait until last card lands + brief pause
 
   useEffect(() => {
     const t1 = setTimeout(() => setOut(true),  holdMs);
-    const t2 = setTimeout(onDone,              holdMs + 380);
+    const t2 = setTimeout(onDone,              holdMs + 220);
     return () => { clearTimeout(t1); clearTimeout(t2); };
   }, [holdMs, onDone]);
 

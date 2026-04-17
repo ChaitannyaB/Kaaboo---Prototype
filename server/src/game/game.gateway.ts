@@ -134,10 +134,17 @@ export class GameGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
     this.gameService.broadcastRoom(socket.data.roomId);
 
     const roomId = socket.data.roomId;
+    const dealMs = (4 * room.players.length - 1) * 55 + 820;
     setTimeout(() => {
       const r = this.gameService.rooms.get(roomId);
-      if (r?.phase === 'peek') { r.endPeek(); this.gameService.broadcastRoom(roomId); }
-    }, 10_000);
+      if (r?.phase !== 'dealing') return;
+      r.startPeek();
+      this.gameService.broadcastRoom(roomId);
+      setTimeout(() => {
+        const r2 = this.gameService.rooms.get(roomId);
+        if (r2?.phase === 'peek') { r2.endPeek(); this.gameService.broadcastRoom(roomId); }
+      }, 10_000);
+    }, dealMs);
 
     return { ok: true };
   }
