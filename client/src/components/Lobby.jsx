@@ -119,8 +119,10 @@ export default function Lobby({ currentUser, mySocketId, gameState, onError, onL
               >
                 💬{chatUnread > 0 && <span className="chat-unread-badge">{chatUnread}</span>}
               </button>
-              <button className="btn-ghost" onClick={onLeaveRoom}>Leave Room</button>
-              <button className="btn-ghost btn-logout" onClick={onLogout}>Log Out</button>
+              <div className="lobby-header-actions">
+                <button className="btn-ghost" onClick={onLeaveRoom}>Leave Room</button>
+                <button className="btn-ghost btn-logout" onClick={onLogout}>Log Out</button>
+              </div>
             </div>
             <p className="subtitle">Logged in as <strong>{currentUser?.username}</strong></p>
 
