@@ -86,6 +86,11 @@ export default function App() {
     setGameState(null);
   }
 
+  function handleLeaveRoom() {
+    socket.emit('leave-room');
+    setGameState(null);
+  }
+
   return (
     <div className="app">
       {error && (
@@ -106,6 +111,7 @@ export default function App() {
           gameState={gameState}
           onError={setError}
           onLogout={handleLogout}
+          onLeaveRoom={handleLeaveRoom}
         />
       )}
 

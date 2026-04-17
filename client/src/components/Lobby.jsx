@@ -7,7 +7,7 @@ import PlayerToasts from './PlayerToasts';
 import ChatPanel from './ChatPanel';
 import { api } from '../api';
 
-export default function Lobby({ currentUser, mySocketId, gameState, onError, onLogout }) {
+export default function Lobby({ currentUser, mySocketId, gameState, onError, onLogout, onLeaveRoom }) {
   const [mode, setMode] = useState('home'); // 'home' | 'create' | 'join' | 'waiting'
   const [joinCode, setJoinCode] = useState('');
   const [showRules, setShowRules] = useState(false);
@@ -30,9 +30,10 @@ export default function Lobby({ currentUser, mySocketId, gameState, onError, onL
   const myPlayer = gameState?.players?.find((p) => p.id === mySocketId);
   const isHost = myPlayer?.isHost;
 
-  // Auto-enter waiting mode when gameState arrives in lobby phase
+  // Auto-enter waiting mode when gameState arrives in lobby phase; reset to home when cleared
   useEffect(() => {
     if (gameState && gameState.phase === 'lobby') setMode('waiting');
+    if (!gameState) setMode('home');
   }, [gameState]);
 
   // Poll public rooms while in join mode
@@ -118,6 +119,7 @@ export default function Lobby({ currentUser, mySocketId, gameState, onError, onL
               >
                 💬{chatUnread > 0 && <span className="chat-unread-badge">{chatUnread}</span>}
               </button>
+              <button className="btn-ghost" onClick={onLeaveRoom}>Leave Room</button>
               <button className="btn-ghost btn-logout" onClick={onLogout}>Log Out</button>
             </div>
             <p className="subtitle">Logged in as <strong>{currentUser?.username}</strong></p>
