@@ -1067,6 +1067,7 @@ button:disabled { opacity: .4; cursor: not-allowed; transform: none; }
   display: grid;
   grid-template-columns: repeat(2, var(--card-w));
   grid-template-rows: repeat(2, var(--card-h));
+  grid-auto-columns: var(--card-w);
   gap: var(--card-gap);
 }
 .card-grid-small {

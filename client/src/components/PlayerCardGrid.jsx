@@ -1,5 +1,19 @@
 import Card from './Card';
 
+function getSlotPlacement(position) {
+  switch (position) {
+    case 'top-left':     return { gridColumn: 1, gridRow: 1 };
+    case 'top-right':    return { gridColumn: 2, gridRow: 1 };
+    case 'bottom-left':  return { gridColumn: 1, gridRow: 2 };
+    case 'bottom-right': return { gridColumn: 2, gridRow: 2 };
+    default: {
+      // extra-0 → col 3 row 1, extra-1 → col 3 row 2, extra-2 → col 4 row 1, …
+      const idx = parseInt(position.replace('extra-', ''), 10) || 0;
+      return { gridColumn: 3 + Math.floor(idx / 2), gridRow: 1 + (idx % 2) };
+    }
+  }
+}
+
 /**
  * Props:
  *   grid             — [{ position, card|null, hasCard }]
@@ -38,6 +52,7 @@ export default function PlayerCardGrid({
               key={slot.position}
               data-player={playerId}
               data-slot={slot.position}
+              style={getSlotPlacement(slot.position)}
               className={[
                 'card-slot-wrap',
                 canClick && 'card-slot-target',
