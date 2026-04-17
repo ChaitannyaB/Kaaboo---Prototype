@@ -62,7 +62,6 @@ export class GameRoom {
   playdownWindow: PlaydownWindow | null;
   giveCardWindow: GiveCardWindow | null;
   powerWindow: PowerWindow | null;
-  _slotCounter: number;
   _lastDiscard: { rank: string; wasDrawn: boolean } | null;
   roundNumber: number;
   lastSwap: LastSwap | null;
@@ -89,7 +88,6 @@ export class GameRoom {
     this.playdownWindow = null;
     this.giveCardWindow = null;
     this.powerWindow = null;
-    this._slotCounter = 0;
     this._lastDiscard = null;
     this.roundNumber = 0;
     this.lastSwap = null;
@@ -285,7 +283,7 @@ export class GameRoom {
     const attempter = this.players.find((p) => p.id === attempterId);
     this._reshuffleDiscardIntoDeck();
     if (this.deck.length > 0) {
-      attempter.grid.push({ position: `extra-${this._slotCounter++}`, card: this.deck.pop() });
+      attempter.grid.push({ position: `extra-${attempter.grid.filter(s => s.position.startsWith('extra-')).length}`, card: this.deck.pop() });
     }
     return { ok: false, penalty: true };
   }
@@ -306,7 +304,7 @@ export class GameRoom {
     if (!giver || !receiver) return { error: 'Player not found' };
     const slot = giver.grid.find((s) => s.position === gridPosition);
     if (!slot?.card) return { error: 'No card at that position' };
-    receiver.grid.push({ position: `extra-${this._slotCounter++}`, card: slot.card });
+    receiver.grid.push({ position: `extra-${receiver.grid.filter(s => s.position.startsWith('extra-')).length}`, card: slot.card });
     slot.card = null;
     this.closeGiveCardWindow();
     return { ok: true };
@@ -320,7 +318,7 @@ export class GameRoom {
     const valid = giver.grid.filter((s) => s.card);
     if (valid.length > 0) {
       const slot = valid[Math.floor(Math.random() * valid.length)];
-      receiver.grid.push({ position: `extra-${this._slotCounter++}`, card: slot.card });
+      receiver.grid.push({ position: `extra-${receiver.grid.filter(s => s.position.startsWith('extra-')).length}`, card: slot.card });
       slot.card = null;
     }
     this.closeGiveCardWindow();
