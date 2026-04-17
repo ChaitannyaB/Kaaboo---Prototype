@@ -13,6 +13,7 @@ export default function Friends({ currentUser, gameState, mySocketId, onInviteSe
   const [inviteSent, setInviteSent] = useState(new Set()); // friendIds that got invite
   const [errors, setErrors] = useState({});
   const [expandedStats, setExpandedStats] = useState(null); // friendId with stats open
+  const [collapsed, setCollapsed] = useState(() => localStorage.getItem('social-collapsed') === 'true');
   const debounceRef = useRef(null);
 
   const loadAll = useCallback(async () => {
@@ -41,23 +42,31 @@ export default function Friends({ currentUser, gameState, mySocketId, onInviteSe
         return [...prev, { id: data.id, userId: data.from.id, username: data.from.username }];
       });
     }
-    function onFriendAccepted(data) {
-      loadAll();
-    }
+    function onFriendAccepted() { loadAll(); }
     function onGameInvite(data) {
       setInvites((prev) => {
         if (prev.find((i) => i.id === data.id)) return prev;
         return [...prev, { id: data.id, roomId: data.roomId, inviterUsername: data.inviter.username, createdAt: Date.now() }];
       });
     }
+    function onFriendOnline({ userId }) {
+      setFriends((prev) => prev.map((f) => f.id === userId ? { ...f, online: true } : f));
+    }
+    function onFriendOffline({ userId }) {
+      setFriends((prev) => prev.map((f) => f.id === userId ? { ...f, online: false } : f));
+    }
 
-    socket.on('friend-request', onFriendRequest);
+    socket.on('friend-request',  onFriendRequest);
     socket.on('friend-accepted', onFriendAccepted);
-    socket.on('game-invite', onGameInvite);
+    socket.on('game-invite',     onGameInvite);
+    socket.on('friend-online',   onFriendOnline);
+    socket.on('friend-offline',  onFriendOffline);
     return () => {
-      socket.off('friend-request', onFriendRequest);
+      socket.off('friend-request',  onFriendRequest);
       socket.off('friend-accepted', onFriendAccepted);
-      socket.off('game-invite', onGameInvite);
+      socket.off('game-invite',     onGameInvite);
+      socket.off('friend-online',   onFriendOnline);
+      socket.off('friend-offline',  onFriendOffline);
     };
   }, [loadAll]);
 
@@ -82,6 +91,13 @@ export default function Friends({ currentUser, gameState, mySocketId, onInviteSe
     }, 400);
     return () => clearTimeout(debounceRef.current);
   }, [searchQuery]);
+
+  function toggleCollapsed() {
+    setCollapsed((c) => {
+      localStorage.setItem('social-collapsed', String(!c));
+      return !c;
+    });
+  }
 
   async function handleAddFriend(userId) {
     try {
@@ -137,10 +153,24 @@ export default function Friends({ currentUser, gameState, mySocketId, onInviteSe
   const friendIds = new Set(friends.map((f) => f.id));
   const isHost = gameState?.players?.find((p) => p.id === mySocketId)?.isHost;
   const inLobby = gameState?.phase === 'lobby';
+  const notifCount = invites.length + requests.length;
+
+  // Online friends first, then alphabetical
+  const sortedFriends = [...friends].sort((a, b) => {
+    if (a.online && !b.online) return -1;
+    if (!a.online && b.online) return 1;
+    return a.username.localeCompare(b.username);
+  });
 
   return (
-    <div className="friends-panel">
-      <h2 className="friends-panel-title">Social</h2>
+    <div className={`friends-panel${collapsed ? ' collapsed' : ''}`}>
+      <div className="friends-panel-header">
+        <h2 className="friends-panel-title">Social</h2>
+        {collapsed && notifCount > 0 && <span className="notif-badge">{notifCount}</span>}
+        <button className="friends-collapse-btn" onClick={toggleCollapsed} title={collapsed ? 'Expand' : 'Collapse'}>
+          {collapsed ? '›' : '‹'}
+        </button>
+      </div>
 
       {/* Game Invites */}
       <div className="friends-section">
@@ -195,16 +225,17 @@ export default function Friends({ currentUser, gameState, mySocketId, onInviteSe
       {/* Friends List */}
       <div className="friends-section">
         <h3 className="friends-section-title">Friends ({friends.length})</h3>
-        {friends.length === 0 ? (
+        {sortedFriends.length === 0 ? (
           <p className="friends-empty">No friends yet. Search below to add some!</p>
         ) : (
-          friends.map((f) => {
+          sortedFriends.map((f) => {
             const inGame = gameState?.players?.find((p) => p.name === f.username);
             const canInvite = inLobby && isHost;
             const alreadyInvited = inviteSent.has(f.id);
             const statsOpen = expandedStats === f.id;
             return (
               <div key={f.id} className="friend-row" style={{ flexWrap: 'wrap' }}>
+                {f.online && <span className="friend-online-dot" title="Online" />}
                 <span className="friend-name">{f.username}</span>
                 {inGame && (
                   <span className="friend-sb-pip">
@@ -247,7 +278,7 @@ export default function Friends({ currentUser, gameState, mySocketId, onInviteSe
       </div>
 
       {/* Add Friends */}
-      <div className="friends-section">
+      <div className="friends-section friends-search">
         <h3 className="friends-section-title">Add Friends</h3>
         <input
           className="input"

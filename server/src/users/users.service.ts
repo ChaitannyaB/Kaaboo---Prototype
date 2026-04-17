@@ -41,7 +41,7 @@ export class UsersService {
 
     const friends = friendships.map((f) => {
       const friend = f.requesterId === userId ? f.addressee : f.requester;
-      return { friendshipId: f.id, id: friend.id, username: friend.username };
+      return { friendshipId: f.id, id: friend.id, username: friend.username, online: this.gameService.onlineUsers.has(friend.id) };
     });
     return { friends };
   }

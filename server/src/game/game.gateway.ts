@@ -36,12 +36,16 @@ export class GameGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
     if (socket.data.userId) {
       this.gameService.onlineUsers.set(socket.data.userId, socket.id);
       socket.emit('me', { userId: socket.data.userId, username: socket.data.username });
+      this.gameService.notifyFriendsPresence(socket.data.userId, true).catch(() => {});
     }
   }
 
   handleDisconnect(socket: Socket) {
     console.log(`[-] ${socket.id}`);
-    if (socket.data.userId) this.gameService.onlineUsers.delete(socket.data.userId);
+    if (socket.data.userId) {
+      this.gameService.notifyFriendsPresence(socket.data.userId, false).catch(() => {});
+      this.gameService.onlineUsers.delete(socket.data.userId);
+    }
 
     const roomId = socket.data.roomId;
     if (!roomId) return;

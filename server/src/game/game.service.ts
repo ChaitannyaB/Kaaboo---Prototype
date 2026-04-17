@@ -174,6 +174,18 @@ export class GameService {
     this.pdecTimers.delete(roomId);
   }
 
+  async notifyFriendsPresence(userId: string, online: boolean) {
+    const friendships = await this.prisma.friendship.findMany({
+      where: { status: 'ACCEPTED', OR: [{ requesterId: userId }, { addresseeId: userId }] },
+      select: { requesterId: true, addresseeId: true },
+    });
+    for (const f of friendships) {
+      const friendId = f.requesterId === userId ? f.addresseeId : f.requesterId;
+      const sid = this.onlineUsers.get(friendId);
+      if (sid && this.server) this.server.to(sid).emit(online ? 'friend-online' : 'friend-offline', { userId });
+    }
+  }
+
   cleanupRoom(roomId: string) {
     for (const map of [this.peekTimers, this.pdTimers, this.gcTimers, this.pdecTimers, this.pactTimers]) {
       const t = map.get(roomId);
