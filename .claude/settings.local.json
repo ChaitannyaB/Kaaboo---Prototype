@@ -1,0 +1,35 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm install *)",
+      "Bash(node -e \"require\\('./game/Deck'\\); require\\('./game/GameRoom'\\); console.log\\('OK'\\)\")",
+      "Bash(node -e ' *)",
+      "Bash(t)",
+      "Bash(node -e \"require\\('./game/GameRoom'\\); console.log\\('module loads OK'\\)\")",
+      "Bash(npm --version)",
+      "Bash(node -e \"require\\('better-sqlite3'\\)\")",
+      "Bash(node -e \"const db = require\\('better-sqlite3'\\)\\(':memory:'\\); db.exec\\('CREATE TABLE t \\(x INT\\)'\\); console.log\\('SQLite OK'\\)\")",
+      "Bash(where python *)",
+      "Bash(where cl *)",
+      "Read(//c/Program Files/Microsoft Visual Studio/**)",
+      "Bash(npm_config_msvs_version=2022 npm install better-sqlite3@9.6.0)",
+      "Bash(cmd /c '\"C:/Program Files/Microsoft Visual Studio/18/Community/VC/Auxiliary/Build/vcvarsall.bat\" arm64 && node-gyp rebuild --release')",
+      "Bash(cmd /c \"\\\\\"C:\\\\\\\\Program Files\\\\\\\\Microsoft Visual Studio\\\\\\\\18\\\\\\\\Community\\\\\\\\VC\\\\\\\\Auxiliary\\\\\\\\Build\\\\\\\\vcvarsall.bat\\\\\" arm64 && node --version\")",
+      "Bash(cmd /c \"\\\\\"C:\\\\\\\\Program Files\\\\\\\\Microsoft Visual Studio\\\\\\\\18\\\\\\\\Community\\\\\\\\VC\\\\\\\\Auxiliary\\\\\\\\Build\\\\\\\\vcvarsall.bat\\\\\" arm64 2>&1 && cl /? 2>&1 | head -3\")",
+      "Bash(cmd /c \"call \\\\\"C:\\\\\\\\Program Files\\\\\\\\Microsoft Visual Studio\\\\\\\\18\\\\\\\\Community\\\\\\\\VC\\\\\\\\Auxiliary\\\\\\\\Build\\\\\\\\vcvarsall.bat\\\\\" arm64 && cd \\\\\"C:\\\\\\\\Users\\\\\\\\Chaitannya Bhagawati\\\\\\\\Documents\\\\\\\\Scripts\\\\\\\\Others\\\\\\\\Kaaboo\\\\\\\\server\\\\\\\\node_modules\\\\\\\\better-sqlite3\\\\\" && node-gyp rebuild --release\")",
+      "Bash(cmd /c \"C:\\\\\\\\Users\\\\\\\\Chaitannya Bhagawati\\\\\\\\Documents\\\\\\\\Scripts\\\\\\\\Others\\\\\\\\Kaaboo\\\\\\\\build_sqlite.bat\")",
+      "Bash(powershell -Command \"& { & 'C:\\\\\\\\Program Files\\\\\\\\Microsoft Visual Studio\\\\\\\\18\\\\\\\\Community\\\\\\\\VC\\\\\\\\Auxiliary\\\\\\\\Build\\\\\\\\vcvarsall.bat' arm64; cd 'C:\\\\\\\\Users\\\\\\\\Chaitannya Bhagawati\\\\\\\\Documents\\\\\\\\Scripts\\\\\\\\Others\\\\\\\\Kaaboo\\\\\\\\server\\\\\\\\node_modules\\\\\\\\better-sqlite3'; node-gyp rebuild --release 2>&1 }\")",
+      "Bash(powershell -Command \"& { & 'C:\\\\\\\\Program Files\\\\\\\\Microsoft Visual Studio\\\\\\\\18\\\\\\\\Community\\\\\\\\VC\\\\\\\\Auxiliary\\\\\\\\Build\\\\\\\\vcvarsall.bat' arm64; Set-Location 'C:\\\\\\\\Users\\\\\\\\Chaitannya Bhagawati\\\\\\\\Documents\\\\\\\\Scripts\\\\\\\\Others\\\\\\\\Kaaboo\\\\\\\\server\\\\\\\\node_modules\\\\\\\\better-sqlite3'; & 'C:\\\\\\\\Program Files\\\\\\\\nodejs\\\\\\\\node_modules\\\\\\\\npm\\\\\\\\node_modules\\\\\\\\node-gyp\\\\\\\\bin\\\\\\\\node-gyp.js' rebuild --release 2>&1 }\")",
+      "Bash(./node_modules/.bin/node-gyp --version)",
+      "Bash(cat)",
+      "Bash(powershell -ExecutionPolicy Bypass -File /tmp/build_sqlite3.ps1)",
+      "Bash(node_modules/.bin/node-gyp --version)",
+      "Bash(node -e \"console.log\\(require\\('./node_modules/better-sqlite3/package.json'\\).version\\)\")",
+      "Bash(powershell -ExecutionPolicy Bypass -File /tmp/build_sqlite4.ps1)",
+      "Bash(node -e \"const db = require\\('better-sqlite3'\\)\\(':memory:'\\); db.exec\\('CREATE TABLE t \\(x INT\\)'\\); db.prepare\\('INSERT INTO t VALUES \\(?\\)'\\).run\\(42\\); const row = db.prepare\\('SELECT * FROM t'\\).get\\(\\); console.log\\('SQLite OK:', row\\)\")",
+      "Bash(node -e \"require\\('./db'\\); require\\('./routes/auth'\\); console.log\\('OK'\\)\")",
+      "Bash(node -e \"require\\('./middleware/auth'\\); require\\('./routes/users'\\); console.log\\('OK'\\)\")",
+      "Bash(npx vite *)"
+    ]
+  }
+}
