@@ -206,6 +206,7 @@ export default function GameBoard({ gameState, myId, onError, onLeave, currentUs
   const [swapAnim, setSwapAnim] = useState(null);
   const [giveAnim, setGiveAnim] = useState(null);         // { from:{rect,card}, to:{rect} }
   const [replaceAnim, setReplaceAnim] = useState(null);   // { from:{rect,card}, to:{rect} }
+  const [penaltyMsg, setPenaltyMsg] = useState(false);
   const [penaltySlots, setPenaltySlots] = useState([]);   // [{ playerId, position }]
   const [logs, setLogs] = useState([]);
   const logIdRef = useRef(0);
@@ -460,7 +461,13 @@ export default function GameBoard({ gameState, myId, onError, onLeave, currentUs
   const drawCard      = () => socket.emit('draw-card', (r) => { if (r?.error) onError(r.error); });
   const discardDrawn  = () => socket.emit('discard-drawn-card', (r) => { if (r?.error) onError(r.error); });
   const replaceGrid   = (pos) => socket.emit('replace-grid-card', { gridPosition: pos }, (r) => { if (r?.error) onError(r.error); });
-  const playDown      = (ownerId, pos) => socket.emit('play-down', { cardOwnerId: ownerId, gridPosition: pos }, (r) => { if (r?.error) onError(r.error); });
+  const playDown      = (ownerId, pos) => socket.emit('play-down', { cardOwnerId: ownerId, gridPosition: pos }, (r) => {
+    if (r?.error) onError(r.error);
+    if (r?.ok === false && r?.penalty) {
+      setPenaltyMsg(true);
+      setTimeout(() => setPenaltyMsg(false), 2500);
+    }
+  });
   const giveCard      = (pos) => socket.emit('give-card', { gridPosition: pos }, (r) => { if (r?.error) onError(r.error); });
   const callKaaboo    = () => socket.emit('call-kaaboo', (r) => { if (r?.error) onError(r.error); });
   const restartGame   = () => socket.emit('start-game', (r) => { if (r?.error) onError(r.error); });
@@ -785,6 +792,9 @@ export default function GameBoard({ gameState, myId, onError, onLeave, currentUs
       )}
       {replaceAnim && (
         <GiveCardAnim from={replaceAnim.from} to={replaceAnim.to} />
+      )}
+      {penaltyMsg && (
+        <div className="playdown-fail-toast">Wrong card — penalty added!</div>
       )}
 
       {/* ── Peek reveal overlay ──────────────────────────────────────────── */}
