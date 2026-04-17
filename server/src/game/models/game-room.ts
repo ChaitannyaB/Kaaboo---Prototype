@@ -253,7 +253,7 @@ export class GameRoom {
       ? this.players.filter((p) => p.id !== currentTurnPlayerId).map((p) => p.id)
       : this.players.map((p) => p.id);
     this.playdownWindow = {
-      endsAt: Date.now() + 8_000,
+      endsAt: Date.now() + 5_000,
       topCard: { ...this.discardPile.at(-1) },
       eligiblePlayers: eligible,
       claimed: false,
