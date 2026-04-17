@@ -597,6 +597,26 @@ button:disabled { opacity: .4; cursor: not-allowed; transform: none; }
   to   { opacity: 1; transform: translateX(-50%) translateY(0)    scale(1);   }
 }
 
+/* Replaced card — badge shown above slot for ~2 s */
+.card-slot-replaced { position: relative; }
+.card-slot-replaced::after {
+  content: 'REPLACED';
+  position: absolute;
+  top: -22px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #22c55e;
+  color: #fff;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: .04em;
+  padding: 2px 6px;
+  border-radius: 4px;
+  white-space: nowrap;
+  pointer-events: none;
+  z-index: 20;
+}
+
 .playdown-fail-toast {
   position: fixed;
   bottom: 120px;

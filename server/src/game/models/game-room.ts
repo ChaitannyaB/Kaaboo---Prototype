@@ -65,6 +65,7 @@ export class GameRoom {
   _lastDiscard: { rank: string; wasDrawn: boolean } | null;
   roundNumber: number;
   lastSwap: LastSwap | null;
+  lastReplace: { playerId: string; position: string } | null;
 
   constructor(
     roomId: string,
@@ -91,6 +92,7 @@ export class GameRoom {
     this._lastDiscard = null;
     this.roundNumber = 0;
     this.lastSwap = null;
+    this.lastReplace = null;
 
     this.addPlayer(hostId, hostName, true, hostUserId, hostScoreBoard);
   }
@@ -128,6 +130,7 @@ export class GameRoom {
     this.giveCardWindow = null;
     this.powerWindow = null;
     this.lastSwap = null;
+    this.lastReplace = null;
     this.discardPile = [];
 
     this.deck = createShuffledDeck();
@@ -214,6 +217,7 @@ export class GameRoom {
 
   drawCard(playerId: string) {
     this.lastSwap = null;
+    this.lastReplace = null;
     this._reshuffleDiscardIntoDeck();
     if (this.deck.length === 0) return { error: 'Deck is empty' };
     const player = this.players.find((p) => p.id === playerId);
@@ -246,6 +250,7 @@ export class GameRoom {
     slot.card = player.hand.pop();
     this.discardPile.push(oldCard);
     this._lastDiscard = { rank: oldCard.rank, wasDrawn: false };
+    this.lastReplace = { playerId, position: gridPosition };
     return { ok: true, discardType: 'replacement' };
   }
 
@@ -490,6 +495,7 @@ export class GameRoom {
           }
         : null,
       lastSwap: this.lastSwap,
+      lastReplace: this.lastReplace,
       finalResult: this.phase === 'finished'
         ? {
             kaabooCallerId: this.kaabooCallerId,

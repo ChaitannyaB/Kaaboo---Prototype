@@ -29,11 +29,12 @@ function getSlotPlacement(position) {
  */
 export default function PlayerCardGrid({
   grid = [], small, label, isActive, selectable, onSlotClick, hint,
-  highlightedSlot, peekedSlots = [], swappedSlots = [], penaltySlots = [], playerId,
+  highlightedSlot, peekedSlots = [], swappedSlots = [], penaltySlots = [], replacedSlots = [], playerId,
 }) {
-  const peekedSet  = new Set(peekedSlots);
-  const swappedSet = new Set(swappedSlots);
-  const penaltySet = new Set(penaltySlots);
+  const peekedSet   = new Set(peekedSlots);
+  const swappedSet  = new Set(swappedSlots);
+  const penaltySet  = new Set(penaltySlots);
+  const replacedSet = new Set(replacedSlots);
 
   return (
     <div className={[
@@ -60,6 +61,7 @@ export default function PlayerCardGrid({
                 peekedSet.has(slot.position)   && 'card-slot-peeked',
                 swappedSet.has(slot.position)  && 'card-slot-swapped',
                 penaltySet.has(slot.position)  && 'card-slot-penalty',
+                replacedSet.has(slot.position) && 'card-slot-replaced',
               ].filter(Boolean).join(' ')}
               onClick={canClick ? () => onSlotClick(slot.position) : undefined}
               title={canClick ? 'Play this card down' : undefined}

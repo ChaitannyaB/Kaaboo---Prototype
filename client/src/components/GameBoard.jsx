@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useLayoutEffect, useRef, useCallback } from 'react';
 import { flushSync } from 'react-dom';
 import socket from '../socket';
 import Card from './Card';
@@ -206,6 +206,7 @@ export default function GameBoard({ gameState, myId, onError, onLeave, currentUs
   const [swapAnim, setSwapAnim] = useState(null);
   const [giveAnim, setGiveAnim] = useState(null);         // { from:{rect,card}, to:{rect} }
   const [replaceAnim, setReplaceAnim] = useState(null);   // { from:{rect,card}, to:{rect} }
+  const [replacedSlot, setReplacedSlot] = useState(null); // { playerId, position }
   const [penaltyMsg, setPenaltyMsg] = useState(false);
   const [penaltySlots, setPenaltySlots] = useState([]);   // [{ playerId, position }]
   const [logs, setLogs] = useState([]);
@@ -276,25 +277,28 @@ export default function GameBoard({ gameState, myId, onError, onLeave, currentUs
       }
     }
 
-    // ── Replace animation (drawn card → grid slot) ──────────────────────────
+    // ── Replace animation (drawn card → grid slot, local player only) ──────────
     const prevHand = prev?.myHand ?? [];
     const currHand = gameState.myHand ?? [];
     if (prevHand.length > 0 && currHand.length === 0) {
       const drawnCard = prevHand[0];
-      const myPrevGrid = prev.players?.find(p => p.id === myId)?.grid ?? [];
-      const myCurrGrid = gameState.players?.find(p => p.id === myId)?.grid ?? [];
-      const changedSlot = myCurrGrid.find(s => {
-        const old = myPrevGrid.find(ps => ps.position === s.position);
-        return s.card && old?.card?.rank !== s.card?.rank;
-      });
-      if (changedSlot) {
-        const fromEl = document.querySelector('.drawn-card-area');
-        const toEl   = document.querySelector(`[data-player="${myId}"][data-slot="${changedSlot.position}"]`);
-        if (fromEl && toEl) {
-          setReplaceAnim({ from: { rect: fromEl.getBoundingClientRect(), card: drawnCard }, to: { rect: toEl.getBoundingClientRect() } });
-          setTimeout(() => setReplaceAnim(null), 550);
+      const pos = pendingReplaceRef.current;
+      pendingReplaceRef.current = null;
+      if (pos) {
+        const fromRect = drawnCardRectRef.current;
+        const toEl     = document.querySelector(`[data-player="${myId}"][data-slot="${pos}"]`);
+        if (fromRect && toEl) {
+          setReplaceAnim({ from: { rect: fromRect, card: drawnCard }, to: { rect: toEl.getBoundingClientRect() } });
+          setTimeout(() => setReplaceAnim(null), 800);
         }
       }
+    }
+
+    // ── Replace badge (all players see which slot was replaced) ─────────────────
+    if (!prev?.lastReplace && gameState.lastReplace) {
+      const { playerId: rId, position: rPos } = gameState.lastReplace;
+      setReplacedSlot({ playerId: rId, position: rPos });
+      setTimeout(() => setReplacedSlot(null), 2000);
     }
 
     // ── Playdown animation (grid slot → discard pile) ────────────────────────
@@ -311,7 +315,7 @@ export default function GameBoard({ gameState, myId, onError, onLeave, currentUs
           const toEl   = document.querySelector('.discard-pile');
           if (fromEl && toEl) {
             setReplaceAnim({ from: { rect: fromEl.getBoundingClientRect(), card: lostSlot.card }, to: { rect: toEl.getBoundingClientRect() } });
-            setTimeout(() => setReplaceAnim(null), 550);
+            setTimeout(() => setReplaceAnim(null), 800);
           }
           break;
         }
@@ -423,6 +427,17 @@ export default function GameBoard({ gameState, myId, onError, onLeave, currentUs
   const hasDrawnCard = Boolean(drawnCard);
   const needsToDraw  = isMyTurn && !hasDrawnCard && !playdownWindow && !giveCardWindow && !powerWindow && !isFinished;
 
+  // Snapshot the drawn-card-area rect while it's still mounted so the replace
+  // animation can use it after the element unmounts (myHand empties → re-render
+  // removes the element before the effect fires).
+  const drawnCardRectRef = useRef(null);
+  useLayoutEffect(() => {
+    if (hasDrawnCard && isMyTurn) {
+      const el = document.querySelector('.drawn-card-area');
+      if (el) drawnCardRectRef.current = el.getBoundingClientRect();
+    }
+  });
+
   const kaabooAlreadyCalled = Boolean(kaabooCallerId);
   const amKaabooCallerBadge = kaabooCallerId === myId;
 
@@ -460,7 +475,11 @@ export default function GameBoard({ gameState, myId, onError, onLeave, currentUs
   // ── Actions ──────────────────────────────────────────────────────────────
   const drawCard      = () => socket.emit('draw-card', (r) => { if (r?.error) onError(r.error); });
   const discardDrawn  = () => socket.emit('discard-drawn-card', (r) => { if (r?.error) onError(r.error); });
-  const replaceGrid   = (pos) => socket.emit('replace-grid-card', { gridPosition: pos }, (r) => { if (r?.error) onError(r.error); });
+  const pendingReplaceRef = useRef(null);
+  const replaceGrid   = (pos) => {
+    pendingReplaceRef.current = pos;
+    socket.emit('replace-grid-card', { gridPosition: pos }, (r) => { if (r?.error) { pendingReplaceRef.current = null; onError(r.error); } });
+  };
   const playDown      = (ownerId, pos) => socket.emit('play-down', { cardOwnerId: ownerId, gridPosition: pos }, (r) => {
     if (r?.error) onError(r.error);
     if (r?.ok === false && r?.penalty) {
@@ -663,6 +682,7 @@ export default function GameBoard({ gameState, myId, onError, onLeave, currentUs
               peekedSlots={peekedByPlayer[p.id] ?? []}
               swappedSlots={swappedByPlayer[p.id] ?? []}
               penaltySlots={penaltySlots.filter(s => s.playerId === p.id).map(s => s.position)}
+              replacedSlots={replacedSlot?.playerId === p.id ? [replacedSlot.position] : []}
             />
             {p.handSize > 0 && <div className="opponent-deciding">deciding…</div>}
             <ScoreBoardPip value={p.scoreBoard} />
@@ -775,6 +795,7 @@ export default function GameBoard({ gameState, myId, onError, onLeave, currentUs
           peekedSlots={peekedByPlayer[myId] ?? []}
           swappedSlots={swappedByPlayer[myId] ?? []}
           penaltySlots={penaltySlots.filter(s => s.playerId === myId).map(s => s.position)}
+          replacedSlots={replacedSlot?.playerId === myId ? [replacedSlot.position] : []}
         />
       </div>
 
