@@ -28,6 +28,7 @@ export const api = {
   removeFriend:      (id) => req(`/api/users/friends/${id}`, { method: 'DELETE' }),
   sendInvite:        (roomId, inviteeId) => req('/api/users/invites', { method: 'POST', body: { roomId, inviteeId } }),
   getInvites:        () => req('/api/users/invites'),
+  dismissInvite:     (id) => req(`/api/users/invites/${id}`, { method: 'DELETE' }),
   deleteAccount:     (password) => req('/api/users/me', { method: 'DELETE', body: { password } }),
   getRooms:          () => req('/api/rooms'),
   getMyStats:        () => req('/api/users/me/stats'),

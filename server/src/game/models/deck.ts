@@ -1,0 +1,41 @@
+export interface Card {
+  suit: string;
+  rank: string;
+  id: string;
+}
+
+const SUITS = ['hearts', 'diamonds', 'clubs', 'spades'];
+const RANKS = ['A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K'];
+
+function createDeck(): Card[] {
+  const deck: Card[] = [];
+  for (const suit of SUITS) {
+    for (const rank of RANKS) {
+      deck.push({ suit, rank, id: `${rank}_${suit}` });
+    }
+  }
+  deck.push({ suit: 'joker', rank: 'JKR', id: 'joker_1' });
+  deck.push({ suit: 'joker', rank: 'JKR', id: 'joker_2' });
+  return deck;
+}
+
+export function shuffle<T>(arr: T[]): T[] {
+  const d = [...arr];
+  for (let i = d.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [d[i], d[j]] = [d[j], d[i]];
+  }
+  return d;
+}
+
+export function createShuffledDeck(): Card[] {
+  return shuffle(createDeck());
+}
+
+const CARD_VALUES: Record<string, number> = { A: 1, J: 10, Q: 10, K: 0, JKR: -1 };
+
+export function cardValue(card: Card): number {
+  if (card.suit === 'joker') return -1;
+  if (card.rank in CARD_VALUES) return CARD_VALUES[card.rank];
+  return parseInt(card.rank, 10);
+}

@@ -291,34 +291,83 @@ button:disabled { opacity: .4; cursor: not-allowed; transform: none; }
 
 /* ── Play-down banner ──────────────────────────────────────────────────────── */
 .playdown-banner {
-  background: linear-gradient(90deg, #1a1a2e, #16213e);
-  border-bottom: 1px solid #3d3d8f55;
+  background: linear-gradient(135deg, #0e0e1f 0%, #131327 100%);
+  border-bottom: 2px solid #3d3d8f66;
   color: #a0a8e0;
-  padding: 8px 20px;
-  font-size: 13px;
+  padding: 14px 28px;
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 20px;
   flex-shrink: 0;
 }
 .playdown-banner.playdown-eligible {
-  background: linear-gradient(90deg, #0d1f3c, #0a2a1f);
-  border-color: #f0a50055;
+  background: linear-gradient(135deg, #0a1628 0%, #071a10 100%);
+  border-color: #f0a500aa;
   color: var(--text);
-  animation: border-pulse 1s ease-in-out infinite alternate;
+  animation: pd-eligible-pulse 1.2s ease-in-out infinite alternate;
 }
-.pd-icon { font-size: 16px; }
+@keyframes pd-eligible-pulse {
+  from { box-shadow: inset 0 -2px 0 rgba(240,165,0,.25), 0 4px 20px rgba(240,165,0,.08); }
+  to   { box-shadow: inset 0 -2px 0 rgba(240,165,0,.7),  0 4px 20px rgba(240,165,0,.22); }
+}
+.pd-timer-col {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  flex-shrink: 0;
+  min-width: 64px;
+}
+.pd-timer-label {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: #6068a0;
+  margin-bottom: 2px;
+}
+.playdown-eligible .pd-timer-label { color: #b07820; }
 .pd-countdown {
-  font-weight: 700;
-  font-size: 15px;
-  color: #a0a8e0;
-  min-width: 24px;
-  display: inline-block;
+  font-weight: 800;
+  font-size: 52px;
+  line-height: 1;
+  color: #5a62a0;
+  min-width: 64px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -.02em;
 }
 .playdown-eligible .pd-countdown { color: var(--accent); }
-.pd-countdown-urgent { color: var(--red) !important; animation: pulse .5s ease-in-out infinite; }
-.pd-eligible-hint   { font-size: 11px; color: var(--accent2); margin-left: auto; }
-.pd-ineligible-hint { font-size: 11px; color: var(--text-muted); margin-left: auto; }
+.pd-countdown-urgent { color: var(--red) !important; animation: pulse .45s ease-in-out infinite; }
+.pd-body {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.pd-main-text {
+  font-size: 19px;
+  font-weight: 700;
+  color: #8890cc;
+  line-height: 1.2;
+}
+.playdown-eligible .pd-main-text { color: var(--text); }
+.pd-main-text strong { color: #c8d0ff; font-size: 22px; }
+.playdown-eligible .pd-main-text strong { color: var(--accent); font-size: 22px; }
+.pd-eligible-hint { font-size: 13px; color: var(--accent2); }
+.pd-ineligible-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+  padding: 4px 10px;
+  border-radius: 20px;
+  background: rgba(200, 60, 60, 0.12);
+  border: 1px solid rgba(200, 60, 60, 0.35);
+  font-size: 12px;
+  font-weight: 600;
+  color: #d07070;
+  letter-spacing: .03em;
+  align-self: flex-start;
+}
 
 /* ── Give-card banner ──────────────────────────────────────────────────────── */
 .givecard-banner {
@@ -354,7 +403,7 @@ button:disabled { opacity: .4; cursor: not-allowed; transform: none; }
   to   { box-shadow: inset 0 -1px 0 rgba(240,165,0,.6); }
 }
 
-/* ── Power banners ─────────────────────────────────────────────────────────── */
+/* ── Power banner — spectator (someone else's power, top of screen) ────────── */
 .power-banner {
   display: flex;
   align-items: center;
@@ -363,33 +412,57 @@ button:disabled { opacity: .4; cursor: not-allowed; transform: none; }
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
   flex-wrap: wrap;
+  background: var(--surface);
+  color: var(--text-muted);
+  font-size: 13px;
 }
 
-/* Decision — it's MY power */
-.power-decision-mine {
-  background: linear-gradient(90deg, #1a1200, #2a2000);
+/* ── Power panel — my power, embedded near my cards ────────────────────────── */
+.power-panel {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 16px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  margin-bottom: 10px;
+  flex-wrap: wrap;
+}
+.power-panel-decision {
+  background: linear-gradient(135deg, #1e1500 0%, #2e2300 100%);
   border-color: var(--accent);
-  animation: border-pulse 1s ease-in-out infinite alternate;
+  box-shadow: 0 0 18px rgba(240,165,0,.12);
+  animation: pd-eligible-pulse 1.2s ease-in-out infinite alternate;
 }
-
-/* Decision — someone else's power */
-.power-decision-other {
-  background: var(--surface);
-  color: var(--text-muted);
-  font-size: 13px;
+.power-panel-action {
+  background: linear-gradient(135deg, #0a1628 0%, #0c1a0c 100%);
+  border-color: #4a8a4a88;
+  box-shadow: 0 0 14px rgba(74,138,74,.1);
 }
-
-/* Action — my power */
-.power-action-mine {
-  background: linear-gradient(90deg, #0a1a2e, #0e1a0a);
-  border-color: #5a8f5a55;
+.power-panel-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
 }
-
-/* Action — someone else's power */
-.power-action {
-  background: var(--surface);
-  color: var(--text-muted);
-  font-size: 13px;
+.power-panel-name { font-size: 15px; font-weight: 700; color: var(--text); }
+.power-panel-sub  { font-size: 12px; color: var(--text-muted); }
+.power-panel-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.power-panel-secs {
+  font-size: 26px;
+  font-weight: 800;
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+  min-width: 40px;
+  text-align: right;
+  line-height: 1;
 }
 
 .power-rank-badge {
@@ -491,6 +564,42 @@ button:disabled { opacity: .4; cursor: not-allowed; transform: none; }
   100% { opacity: 0; transform: translateX(-50%) translateY(-6px) scale(.8); }
 }
 
+/* Penalty card — highlights the newly added penalty slot for ~3 s */
+.card-slot-penalty { position: relative; }
+.card-slot-penalty .card {
+  box-shadow: 0 0 0 2px var(--red), 0 0 18px rgba(224,82,82,.65) !important;
+  animation: penalty-glow 0.7s ease-in-out infinite alternate;
+}
+.card-slot-penalty::before {
+  content: '+PENALTY';
+  position: absolute;
+  top: -22px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--red);
+  color: #fff;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: .04em;
+  padding: 2px 6px;
+  border-radius: 4px;
+  white-space: nowrap;
+  pointer-events: none;
+  z-index: 20;
+  animation: penalty-badge-in .25s ease-out;
+}
+@keyframes penalty-glow {
+  from { box-shadow: 0 0 0 2px var(--red), 0 0 8px  rgba(224,82,82,.4); }
+  to   { box-shadow: 0 0 0 3px var(--red), 0 0 22px rgba(224,82,82,.85); }
+}
+@keyframes penalty-badge-in {
+  from { opacity: 0; transform: translateX(-50%) translateY(5px) scale(.85); }
+  to   { opacity: 1; transform: translateX(-50%) translateY(0)    scale(1);   }
+}
+
+/* game-log penalty entry */
+.game-log-penalty { color: var(--red); }
+
 /* Swap banner — shown when a swap just occurred */
 .swap-banner {
   background: linear-gradient(90deg, #1a1200, #2a2000);
@@ -509,6 +618,86 @@ button:disabled { opacity: .4; cursor: not-allowed; transform: none; }
   from { opacity: 0; transform: translateY(-6px); }
   to   { opacity: 1; transform: translateY(0); }
 }
+
+/* ── Game Log ──────────────────────────────────────────────────────────────── */
+.game-log-panel {
+  position: fixed;
+  bottom: 16px;
+  left: 16px;
+  width: 256px;
+  z-index: 200;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+  box-shadow: 0 4px 24px rgba(0,0,0,.45);
+  font-size: 12px;
+}
+.game-log-toggle {
+  width: 100%;
+  background: var(--surface2);
+  border: none;
+  padding: 7px 12px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 600;
+  user-select: none;
+}
+.game-log-toggle:hover { background: #2a3040; }
+.game-log-chevron { font-size: 10px; opacity: .7; }
+.game-log-title   { flex: 1; text-align: left; }
+.game-log-count   { font-size: 11px; color: var(--text-muted); }
+.game-log-badge {
+  background: var(--accent);
+  color: #000;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 10px;
+  min-width: 20px;
+  text-align: center;
+}
+.game-log-list {
+  max-height: 200px;
+  overflow-y: auto;
+  padding: 4px 0;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
+.game-log-list::-webkit-scrollbar { width: 4px; }
+.game-log-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+.game-log-empty {
+  padding: 10px 12px;
+  color: var(--text-muted);
+  font-style: italic;
+}
+.game-log-entry {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 4px 12px;
+  border-bottom: 1px solid rgba(255,255,255,.03);
+  color: var(--text-muted);
+  line-height: 1.4;
+}
+.game-log-icon { font-size: 11px; flex-shrink: 0; opacity: .85; }
+.game-log-text { flex: 1; }
+
+/* Per-type colours */
+.game-log-round       { color: var(--accent); font-weight: 600; border-top: 1px solid var(--border); }
+.game-log-kaaboo      { color: var(--accent); font-weight: 600; }
+.game-log-win         { color: var(--accent2); font-weight: 600; }
+.game-log-loss        { color: var(--red); font-weight: 600; }
+.game-log-turn        { color: var(--text); }
+.game-log-playdown-win { color: var(--accent2); }
+.game-log-power-used  { color: #c084fc; }
+.game-log-swap        { color: var(--accent); }
+.game-log-peek        { color: #c084fc; }
+.game-log-give        { color: #60a5fa; }
 
 /* ── Game Board Layout ─────────────────────────────────────────────────────── */
 .gameboard {
@@ -595,6 +784,7 @@ button:disabled { opacity: .4; cursor: not-allowed; transform: none; }
   background: var(--surface);
   flex-shrink: 0;
   align-items: flex-start;
+  justify-content: center;
 }
 
 /* Table centre */
@@ -677,6 +867,64 @@ button:disabled { opacity: .4; cursor: not-allowed; transform: none; }
   padding: 2px 8px;
   border-radius: 4px;
 }
+/* ── Peek reveal overlay ─────────────────────────────────────────────────── */
+.peek-reveal-overlay {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 250;
+  pointer-events: none;
+}
+.peek-reveal-popup {
+  pointer-events: all;
+  background: var(--surface);
+  border: 2px solid #c084fc;
+  border-radius: 16px;
+  padding: 20px 28px 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  box-shadow: 0 0 40px rgba(192,132,252,.45), 0 8px 32px rgba(0,0,0,.5);
+  animation: peek-reveal-in .2s ease-out;
+  cursor: pointer;
+  min-width: 160px;
+}
+@keyframes peek-reveal-in {
+  from { transform: scale(.7); opacity: 0; }
+  to   { transform: scale(1);  opacity: 1; }
+}
+.peek-reveal-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  justify-content: center;
+}
+.peek-reveal-eye  { font-size: 18px; }
+.peek-reveal-title { font-size: 13px; font-weight: 600; color: #c084fc; }
+.peek-reveal-secs {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-muted);
+  margin-left: auto;
+  min-width: 24px;
+  text-align: right;
+}
+.peek-reveal-secs.urgent { color: var(--red); animation: pulse .6s ease-in-out infinite; }
+.peek-reveal-card-display .card {
+  transform: scale(1.25);
+  transform-origin: center;
+  margin: 8px 0;
+}
+.peek-reveal-dismiss {
+  font-size: 11px;
+  color: var(--text-muted);
+  opacity: .6;
+}
+
 .action-buttons { display: flex; gap: 10px; margin-left: auto; }
 .action-hint { font-size: 12px; color: var(--text-muted); font-style: italic; }
 .your-turn-badge {
@@ -1982,5 +2230,67 @@ button:disabled { opacity: .4; cursor: not-allowed; transform: none; }
     border-left: none;
     border-top: 1px solid var(--border);
     min-width: unset;
+  }
+}
+
+/* ── Mobile game layout (≤ 480px) ─────────────────────────────────────────── */
+@media (max-width: 480px) {
+  /* Use dynamic viewport height so iOS Safari's address bar doesn't cut off */
+  .gameboard { height: 100dvh; }
+
+  /* Header — compress, drop username to save space */
+  .game-header { padding: 7px 10px; gap: 7px; }
+  .header-username { display: none; }
+  .title-small { font-size: 14px; }
+  .room-code-small { font-size: 11px; }
+  .round-badge { font-size: 10px; padding: 2px 6px; }
+  .header-turn-badge { font-size: 10px; padding: 2px 6px; }
+  .btn-leave, .btn-rules-help, .btn-chat { padding: 4px 8px; font-size: 12px; }
+
+  /* Top banners — tighten padding */
+  .kaaboo-active-banner { padding: 6px 12px; font-size: 12px; }
+  .peek-banner          { padding: 6px 12px; font-size: 12px; }
+  .power-banner         { padding: 6px 12px; font-size: 12px; }
+  .givecard-banner      { padding: 7px 12px; font-size: 12px; }
+  .swap-banner          { padding: 6px 12px; font-size: 12px; }
+
+  /* Playdown banner — shrink the big countdown so it doesn't dominate */
+  .playdown-banner   { padding: 9px 14px; gap: 12px; }
+  .pd-countdown      { font-size: 38px; min-width: 48px; }
+  .pd-timer-label    { font-size: 9px; }
+  .pd-main-text      { font-size: 15px; }
+  .pd-main-text strong { font-size: 17px; }
+  .pd-eligible-hint,
+  .pd-ineligible-badge { font-size: 12px; }
+
+  /* Opponents row */
+  .opponents-row { padding: 8px 10px; gap: 10px; }
+
+  /* Table centre — reduce gap to prevent overflow when drawn card is visible */
+  .table-centre { gap: 12px; padding: 8px 10px; }
+  .drawn-card-area { padding: 8px 10px; gap: 6px; }
+  .drawn-card-area::before { font-size: 9px; }
+  .btn-discard { font-size: 11px; padding: 5px 10px; }
+
+  /* My area */
+  .my-area { padding: 10px 10px 12px; gap: 10px; }
+
+  /* Power panel — reduce sizes, let buttons wrap */
+  .power-panel      { padding: 10px 12px; gap: 8px; }
+  .power-panel-secs { font-size: 20px; min-width: 32px; }
+  .power-panel-name { font-size: 13px; }
+  .power-panel-sub  { font-size: 11px; }
+  .power-yes        { padding: 7px 12px; font-size: 12px; }
+  .power-no         { padding: 7px 10px; font-size: 12px; }
+  .power-sub-btn    { font-size: 11px; padding: 5px 10px; }
+
+  /* Give-card banner countdowns */
+  .gc-countdown { font-size: 13px; }
+  .gc-hint      { font-size: 11px; }
+
+  /* Card grid — slightly smaller cards on phone */
+  .card-grid {
+    --card-w: 62px;
+    --card-h: 88px;
   }
 }

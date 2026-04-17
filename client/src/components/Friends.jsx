@@ -22,7 +22,7 @@ export default function Friends({ currentUser, gameState, mySocketId, onInviteSe
         api.getFriendRequests(),
         api.getFriends(),
       ]);
-      setInvites(inv.invites || []);
+      setInvites((inv.invites || []).map((i) => ({ ...i, createdAt: typeof i.createdAt === 'string' ? new Date(i.createdAt).getTime() : i.createdAt })));
       setRequests(req.requests || []);
       setFriends(fr.friends || []);
     } catch (err) {
@@ -47,7 +47,7 @@ export default function Friends({ currentUser, gameState, mySocketId, onInviteSe
     function onGameInvite(data) {
       setInvites((prev) => {
         if (prev.find((i) => i.id === data.id)) return prev;
-        return [...prev, { id: data.id, roomId: data.roomId, inviterUsername: data.inviter.username, createdAt: Date.now() / 1000 }];
+        return [...prev, { id: data.id, roomId: data.roomId, inviterUsername: data.inviter.username, createdAt: Date.now() }];
       });
     }
 
@@ -60,6 +60,15 @@ export default function Friends({ currentUser, gameState, mySocketId, onInviteSe
       socket.off('game-invite', onGameInvite);
     };
   }, [loadAll]);
+
+  // Auto-expire invites older than 2 minutes from UI
+  useEffect(() => {
+    const timer = setInterval(() => {
+      const cutoff = Date.now() - 2 * 60 * 1000;
+      setInvites((prev) => prev.filter((i) => i.createdAt > cutoff));
+    }, 5_000);
+    return () => clearInterval(timer);
+  }, []);
 
   // Debounced search
   useEffect(() => {
@@ -114,14 +123,15 @@ export default function Friends({ currentUser, gameState, mySocketId, onInviteSe
     }
   }
 
-  function handleJoin(roomId) {
-    // Remove invite from list
+  function handleJoin(roomId, inviteId) {
     setInvites((prev) => prev.filter((i) => i.roomId !== roomId));
+    try { api.dismissInvite(inviteId); } catch {}
     onJoinRoom?.(roomId);
   }
 
-  function dismissInvite(inviteId) {
+  async function dismissInvite(inviteId) {
     setInvites((prev) => prev.filter((i) => i.id !== inviteId));
+    try { await api.dismissInvite(inviteId); } catch {}
   }
 
   const friendIds = new Set(friends.map((f) => f.id));
@@ -146,7 +156,7 @@ export default function Friends({ currentUser, gameState, mySocketId, onInviteSe
               <span className="invite-from">{inv.inviterUsername}</span>
               <span className="invite-room">#{inv.roomId}</span>
               <div className="invite-actions">
-                <button className="btn-primary invite-btn" onClick={() => handleJoin(inv.roomId)}>
+                <button className="btn-primary invite-btn" onClick={() => handleJoin(inv.roomId, inv.id)}>
                   Join
                 </button>
                 <button className="btn-ghost invite-btn" onClick={() => dismissInvite(inv.id)}>

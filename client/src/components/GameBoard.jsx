@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import socket from '../socket';
 import Card from './Card';
 import PlayerCardGrid from './PlayerCardGrid';
@@ -6,6 +6,150 @@ import StatsPanel from './StatsPanel';
 import RulesModal from './RulesModal';
 import PlayerToasts from './PlayerToasts';
 import ChatPanel from './ChatPanel';
+import SwapAnimOverlay from './SwapAnimOverlay';
+import GiveCardAnim from './GiveCardAnim';
+import GameLog from './GameLog';
+
+// ── Game event log detection ───────────────────────────────────────────────────
+function detectGameEvents(prev, cur, myId) {
+  const entries = [];
+  if (!cur) return entries;
+
+  const players = cur.players ?? [];
+  const pName = (id) => players.find(p => p.id === id)?.name ?? '?';
+  const you   = (id) => id === myId ? 'You' : pName(id);
+  const pos   = (p)  => p?.startsWith('extra') ? 'extra card' : p ?? '?';
+
+  // Round start — signals the caller to clear logs first
+  if (cur.roundNumber > 0 && cur.roundNumber !== (prev?.roundNumber ?? 0)) {
+    return [{ text: `Round ${cur.roundNumber} started`, type: 'round', clearBefore: true }];
+  }
+
+  // Phase transitions
+  if (cur.phase === 'peek' && prev?.phase === 'lobby') {
+    entries.push({ text: 'Game started — memorise your bottom two cards!', type: 'info' });
+  }
+  if (cur.phase === 'playing' && prev?.phase === 'peek') {
+    entries.push({ text: 'Cards hidden — play begins', type: 'info' });
+  }
+
+  // Turn change
+  if (cur.phase === 'playing' &&
+      cur.currentTurnPlayerId &&
+      cur.currentTurnPlayerId !== prev?.currentTurnPlayerId) {
+    const label = cur.currentTurnPlayerId === myId ? 'Your turn' : `${pName(cur.currentTurnPlayerId)}'s turn`;
+    entries.push({ text: label, type: 'turn' });
+  }
+
+  // Kaaboo called
+  if (cur.kaabooCallerId && !prev?.kaabooCallerId) {
+    entries.push({ text: `${you(cur.kaabooCallerId)} called KAABOO!`, type: 'kaaboo' });
+  }
+
+  // Player played their drawn card (handSize 1→0 + discard pile grew, not a playdown claim)
+  if ((cur.discardPile?.length ?? 0) > (prev?.discardPile?.length ?? 0) &&
+      !cur.playdownWindow?.claimed) {
+    const topCard = cur.discardPile?.at(-1);
+    for (const p of players) {
+      const prevP = prev?.players?.find(pp => pp.id === p.id);
+      if (prevP && prevP.handSize === 1 && p.handSize === 0) {
+        entries.push({ text: `${you(p.id)} played a ${topCard?.rank ?? '?'}`, type: 'action' });
+        break;
+      }
+    }
+  }
+
+  // Playdown window opened
+  if (cur.playdownWindow && !prev?.playdownWindow) {
+    entries.push({ text: `Playdown window: ${cur.playdownWindow.topCardRank}s in play!`, type: 'playdown' });
+  }
+
+  // Playdown claimed
+  if (cur.playdownWindow?.claimed && !prev?.playdownWindow?.claimed) {
+    entries.push({ text: `Playdown! ${cur.playdownWindow.topCardRank} matched`, type: 'playdown-win' });
+  }
+
+  // Give-card window
+  if (cur.giveCardWindow && !prev?.giveCardWindow) {
+    entries.push({
+      text: `${you(cur.giveCardWindow.giverId)} must give a card to ${you(cur.giveCardWindow.receiverId)}`,
+      type: 'give',
+    });
+  }
+
+  // Power opportunity (decision phase)
+  if (cur.powerWindow?.phase === 'decision' && prev?.powerWindow?.phase !== 'decision') {
+    entries.push({
+      text: `${you(cur.powerWindow.playerId)} drew a ${cur.powerWindow.cardRank} — ${cur.powerWindow.powerLabel}`,
+      type: 'power',
+    });
+  }
+
+  // Power used
+  if (cur.powerWindow?.phase === 'action' && prev?.powerWindow?.phase === 'decision') {
+    entries.push({
+      text: `${you(cur.powerWindow.playerId)} used their ${cur.powerWindow.cardRank} power`,
+      type: 'power-used',
+    });
+  }
+
+  // Power skipped (decision window closed without using)
+  if (!cur.powerWindow && prev?.powerWindow?.phase === 'decision') {
+    entries.push({
+      text: `${you(prev.powerWindow.playerId)} skipped their ${prev.powerWindow.cardRank} power`,
+      type: 'power-skip',
+    });
+  }
+
+  // Peek completed
+  const prevPeeked = prev?.powerWindow?.peekedCards?.length ?? 0;
+  const curPeeked  = cur.powerWindow?.peekedCards?.length ?? 0;
+  if (curPeeked > prevPeeked && cur.powerWindow) {
+    const newest  = cur.powerWindow.peekedCards[curPeeked - 1];
+    const peeker  = you(cur.powerWindow.playerId);
+    const target  = newest.ownerId === cur.powerWindow.playerId ? 'their own' : `${you(newest.ownerId)}'s`;
+    entries.push({ text: `${peeker} peeked at ${target} card`, type: 'peek' });
+  }
+
+  // Penalty card received (grid grew while playdown window open and not claimed)
+  if (cur.playdownWindow && !cur.playdownWindow.claimed) {
+    for (const curP of cur.players) {
+      const prevP    = prev?.players?.find(pp => pp.id === curP.id);
+      const prevPosSet = new Set(prevP?.grid?.map(s => s.position) ?? []);
+      const newSlot  = curP.grid.find(s => s.hasCard && !prevPosSet.has(s.position));
+      if (newSlot) {
+        entries.push({ text: `${you(curP.id)} got a penalty card!`, type: 'penalty' });
+      }
+    }
+  }
+
+  // Give-card completed
+  if (prev?.giveCardWindow && !cur.giveCardWindow && cur.phase !== 'finished') {
+    const giverId    = prev.giveCardWindow.giverId;
+    const receiverId = prev.giveCardWindow.receiverId;
+    entries.push({ text: `${you(giverId)} gave a card to ${you(receiverId)}`, type: 'give' });
+  }
+
+  // Swap completed
+  if (!prev?.lastSwap && cur.lastSwap) {
+    const swap   = cur.lastSwap;
+    const aOwner = swap.first.playerId  === myId ? 'your' : `${pName(swap.first.playerId)}'s`;
+    const bOwner = swap.second.playerId === myId ? 'your' : `${pName(swap.second.playerId)}'s`;
+    entries.push({
+      text: `${swap.swapperName} swapped ${aOwner} ${pos(swap.first.position)} with ${bOwner} ${pos(swap.second.position)}`,
+      type: 'swap',
+    });
+  }
+
+  // Game finished
+  if (cur.phase === 'finished' && prev?.phase !== 'finished' && cur.finalResult) {
+    const caller  = you(cur.finalResult.kaabooCallerId);
+    const outcome = cur.finalResult.kaabooCallerWon ? 'WON' : 'LOST';
+    entries.push({ text: `${caller} called Kaaboo and ${outcome}!`, type: cur.finalResult.kaabooCallerWon ? 'win' : 'loss' });
+  }
+
+  return entries;
+}
 
 function useCountdown(endsAt) {
   const [secs, setSecs] = useState(0);
@@ -42,6 +186,21 @@ export default function GameBoard({ gameState, myId, onError, onLeave, currentUs
   const [chatOpen, setChatOpen] = useState(false);
   const [chatUnread, setChatUnread] = useState(0);
 
+  // Peek reveal overlay
+  const [peekReveal, setPeekReveal] = useState(null); // { card, ownerName }
+  const [peekRevealExpiresAt, setPeekRevealExpiresAt] = useState(null);
+  const peekRevealSecs = useCountdown(peekRevealExpiresAt);
+  const prevPeekedCountRef = useRef(0);
+  const prevPowerPlayerIdRef = useRef(null);
+
+  // Swap animation + game log — share one "previous state" ref
+  const prevStateRef = useRef(null);
+  const [swapAnim, setSwapAnim] = useState(null);
+  const [giveAnim, setGiveAnim] = useState(null);         // { from:{rect,card}, to:{rect} }
+  const [penaltySlots, setPenaltySlots] = useState([]);   // [{ playerId, position }]
+  const [logs, setLogs] = useState([]);
+  const logIdRef = useRef(0);
+
   useEffect(() => {
     if (!gameState?.powerWindow || gameState.powerWindow.phase !== 'action') {
       setActivePowerMode(null);
@@ -53,6 +212,125 @@ export default function GameBoard({ gameState, myId, onError, onLeave, currentUs
     if (prevSwapSel.current && !gameState?.powerWindow?.swapSelection) setActivePowerMode(null);
     prevSwapSel.current = gameState?.powerWindow?.swapSelection ?? null;
   }, [gameState?.powerWindow?.swapSelection]);
+
+  // Combined: swap animation + game log (both need prev vs cur comparison)
+  useEffect(() => {
+    const prev = prevStateRef.current;
+    prevStateRef.current = gameState;
+    if (!gameState) return;
+
+    // ── Swap animation ──────────────────────────────────────────────────────
+    if (!prev?.lastSwap && gameState.lastSwap) {
+      const swap = gameState.lastSwap;
+      const el1 = document.querySelector(`[data-player="${swap.first.playerId}"][data-slot="${swap.first.position}"]`);
+      const el2 = document.querySelector(`[data-player="${swap.second.playerId}"][data-slot="${swap.second.position}"]`);
+      if (el1 && el2) {
+        const rect1 = el1.getBoundingClientRect();
+        const rect2 = el2.getBoundingClientRect();
+        // Cards at the positions BEFORE the swap (from prev state)
+        const prevCard1 = prev?.players?.find(p => p.id === swap.first.playerId)
+          ?.grid?.find(s => s.position === swap.first.position)?.card ?? null;
+        const prevCard2 = prev?.players?.find(p => p.id === swap.second.playerId)
+          ?.grid?.find(s => s.position === swap.second.position)?.card ?? null;
+        setSwapAnim({ first: { rect: rect1, card: prevCard1 }, second: { rect: rect2, card: prevCard2 } });
+        setTimeout(() => setSwapAnim(null), 1100);
+      }
+    }
+
+    // ── Give-card animation ─────────────────────────────────────────────────
+    if (prev?.giveCardWindow && !gameState.giveCardWindow && gameState.phase !== 'finished') {
+      const { giverId, receiverId } = prev.giveCardWindow;
+
+      // Find which slot in giver's grid became empty
+      const prevGiver = prev.players?.find(p => p.id === giverId);
+      const curGiver  = gameState.players?.find(p => p.id === giverId);
+      let givenPos = null, givenCard = null;
+      for (const ps of (prevGiver?.grid ?? [])) {
+        if (ps.hasCard) {
+          const cs = curGiver?.grid?.find(s => s.position === ps.position);
+          if (cs && !cs.hasCard) { givenPos = ps.position; givenCard = ps.card ?? null; break; }
+        }
+      }
+
+      // Find the new extra-N slot in receiver's grid
+      const prevRecvPos = new Set(prev.players?.find(p => p.id === receiverId)?.grid?.map(s => s.position) ?? []);
+      const newRecvSlot = gameState.players?.find(p => p.id === receiverId)?.grid?.find(s => !prevRecvPos.has(s.position));
+
+      if (givenPos && newRecvSlot) {
+        const srcEl = document.querySelector(`[data-player="${giverId}"][data-slot="${givenPos}"]`);
+        const dstEl = document.querySelector(`[data-player="${receiverId}"][data-slot="${newRecvSlot.position}"]`);
+        if (srcEl && dstEl) {
+          setGiveAnim({ from: { rect: srcEl.getBoundingClientRect(), card: givenCard }, to: { rect: dstEl.getBoundingClientRect() } });
+          setTimeout(() => setGiveAnim(null), 1100);
+        }
+      }
+    }
+
+    // ── Penalty card highlight ───────────────────────────────────────────────
+    if (gameState.playdownWindow && !gameState.playdownWindow.claimed) {
+      for (const curP of gameState.players) {
+        const prevP    = prev?.players?.find(pp => pp.id === curP.id);
+        const prevPos  = new Set(prevP?.grid?.map(s => s.position) ?? []);
+        const newSlot  = curP.grid.find(s => s.hasCard && !prevPos.has(s.position));
+        if (newSlot) {
+          const entry = { playerId: curP.id, position: newSlot.position };
+          setPenaltySlots(ps => [...ps, entry]);
+          setTimeout(() => setPenaltySlots(ps => ps.filter(s => !(s.playerId === entry.playerId && s.position === entry.position))), 3000);
+        }
+      }
+    }
+
+    // ── Game log ────────────────────────────────────────────────────────────
+    const entries = detectGameEvents(prev, gameState, myId);
+    if (entries.length > 0) {
+      const shouldClear = entries.some(e => e.clearBefore);
+      setLogs(prevLogs => {
+        const base = shouldClear ? [] : prevLogs;
+        return [...base, ...entries.map(e => ({
+          id: ++logIdRef.current,
+          ts: Date.now(),
+          text: e.text,
+          type: e.type,
+        }))];
+      });
+    }
+  }, [gameState]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Auto-hide peek reveal when countdown reaches zero
+  useEffect(() => {
+    if (peekRevealSecs === 0 && peekRevealExpiresAt !== null) {
+      setPeekReveal(null);
+      setPeekRevealExpiresAt(null);
+    }
+  }, [peekRevealSecs, peekRevealExpiresAt]);
+
+  // Detect a newly peeked card and show it prominently
+  useEffect(() => {
+    const pw = gameState?.powerWindow;
+    if (!pw) {
+      prevPeekedCountRef.current = 0;
+      prevPowerPlayerIdRef.current = null;
+      return;
+    }
+    // Reset counter when a different player's power starts
+    if (pw.playerId !== prevPowerPlayerIdRef.current) {
+      prevPeekedCountRef.current = 0;
+      prevPowerPlayerIdRef.current = pw.playerId;
+    }
+    const peekedCards = pw.peekedCards ?? [];
+    if (pw.playerId === myId && pw.phase === 'action' && peekedCards.length > prevPeekedCountRef.current) {
+      const newest = peekedCards[peekedCards.length - 1];
+      const owner = gameState.players.find((p) => p.id === newest.ownerId);
+      const slot = owner?.grid?.find((s) => s.position === newest.position);
+      if (slot?.card) {
+        const ownerName = owner.id === myId ? 'your own card' : `${owner.name}'s card`;
+        setPeekReveal({ card: slot.card, ownerName });
+        setPeekRevealExpiresAt(Date.now() + 5000);
+      }
+    }
+    prevPeekedCountRef.current = peekedCards.length;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [gameState?.powerWindow?.peekedCards?.length, gameState?.powerWindow?.playerId]);
 
   if (!gameState) return <div className="loading">Loading game…</div>;
 
@@ -244,14 +522,18 @@ export default function GameBoard({ gameState, myId, onError, onLeave, currentUs
       {/* Play-down banner */}
       {playdownWindow && !playdownWindow.claimed && (
         <div className={`playdown-banner${isEligiblePlaydown ? ' playdown-eligible' : ''}`}>
-          <span className="pd-icon">⚡</span>
-          <span>
-            Play a <strong>{playdownWindow.topCardRank}</strong> to play down!{' '}
-            <span className={`pd-countdown${playdownSecs <= 1 ? ' pd-countdown-urgent' : ''}`}>{playdownSecs}s</span>
-          </span>
-          {isEligiblePlaydown
-            ? <span className="pd-eligible-hint">Click any card — yours or an opponent's</span>
-            : <span className="pd-ineligible-hint">Not eligible this round</span>}
+          <div className="pd-timer-col">
+            <span className="pd-timer-label">Time left</span>
+            <span className={`pd-countdown${playdownSecs <= 1 ? ' pd-countdown-urgent' : ''}`}>{playdownSecs}</span>
+          </div>
+          <div className="pd-body">
+            <span className="pd-main-text">
+              ⚡ Play a <strong>{playdownWindow.topCardRank}</strong> to play down!
+            </span>
+            {isEligiblePlaydown
+              ? <span className="pd-eligible-hint">Click any matching card — yours or an opponent's</span>
+              : <span className="pd-ineligible-badge">✕ Not eligible this turn</span>}
+          </div>
         </div>
       )}
 
@@ -274,63 +556,14 @@ export default function GameBoard({ gameState, myId, onError, onLeave, currentUs
         </div>
       )}
 
-      {/* Power banners */}
-      {powerWindow && powerPhase === 'decision' && (
-        isMyPower ? (
-          <div className="power-banner power-decision-mine">
-            <div className="power-rank-badge">{POWER_RANK_SYMBOL[powerWindow.cardRank]}</div>
-            <div className="power-text">
-              <span className="power-label">{powerWindow.powerLabel}</span>
-              <span className="power-subtext">Use your power?{' '}
-                <span className={`power-countdown${powerSecs <= 2 ? ' power-countdown-urgent' : ''}`}>{powerSecs}s</span>
-              </span>
-            </div>
-            <div className="power-decision-btns">
-              <button className="btn-primary power-yes" onClick={usePower}>Use It</button>
-              <button className="btn-ghost power-no" onClick={skipPower}>Skip</button>
-            </div>
-          </div>
-        ) : (
-          <div className="power-banner power-decision-other">
-            <div className="power-rank-badge power-rank-dim">{POWER_RANK_SYMBOL[powerWindow.cardRank]}</div>
-            <span><strong>{playerName(powerWindow.playerId)}</strong> may use their <strong>{powerWindow.cardRank}</strong> power… <span className="power-countdown">{powerSecs}s</span></span>
-          </div>
-        )
-      )}
-
-      {powerWindow && powerPhase === 'action' && (
-        <div className={`power-banner power-action${isMyPower ? ' power-action-mine' : ''}`}>
-          <div className="power-rank-badge">{POWER_RANK_SYMBOL[powerWindow.cardRank]}</div>
-          <div className="power-text">
-            {isMyPower ? (
-              <>
-                {powerType === 'double' && !powerWindow.swapSelection && !activePowerMode && <span className="power-label">Choose your action</span>}
-                {powerWindow.swapSelection && <span className="power-label">Select the second card to swap</span>}
-                {powerActionMode === 'peek-self'  && <span className="power-label">Click one of YOUR cards to peek</span>}
-                {powerActionMode === 'peek-other' && <span className="power-label">Click an OPPONENT'S card to peek</span>}
-                {powerActionMode === 'peek-any'   && <span className="power-label">Click any card to peek at it</span>}
-                {powerActionMode === 'swap-first' && !powerWindow.swapSelection && <span className="power-label">Select the first card to swap</span>}
-                <span className="power-subtext">
-                  <span className={`power-countdown${powerSecs <= 5 ? ' power-countdown-urgent' : ''}`}>{powerSecs}s</span> remaining
-                </span>
-              </>
-            ) : (
-              <span className="power-label"><strong>{playerName(powerWindow.playerId)}</strong> is using their {powerWindow.cardRank} power… <span className="power-countdown">{powerSecs}s</span></span>
-            )}
-          </div>
-          {isMyPower && powerType === 'double' && !powerWindow.swapSelection && !activePowerMode && (
-            <div className="power-subpower-btns">
-              {powerWindow.remainingPowers?.includes('peek') && <button className="btn-secondary power-sub-btn" onClick={() => setActivePowerMode('peek')}>👁 Peek</button>}
-              {powerWindow.remainingPowers?.includes('swap') && <button className="btn-secondary power-sub-btn" onClick={() => setActivePowerMode('swap')}>🔀 Swap</button>}
-              <button className="btn-ghost power-sub-btn" onClick={skipRemaining}>Skip</button>
-            </div>
-          )}
-          {isMyPower && powerType === 'double' && activePowerMode && !powerWindow.swapSelection && (
-            <button className="btn-ghost power-sub-btn" onClick={() => setActivePowerMode(null)}>← Back</button>
-          )}
-          {isMyPower && powerType !== 'double' && (
-            <button className="btn-ghost power-sub-btn" onClick={skipRemaining}>Skip</button>
-          )}
+      {/* Power banner — spectator only (someone else's power) */}
+      {powerWindow && !isMyPower && (
+        <div className="power-banner">
+          <div className="power-rank-badge power-rank-dim">{POWER_RANK_SYMBOL[powerWindow.cardRank]}</div>
+          {powerPhase === 'decision'
+            ? <span><strong>{playerName(powerWindow.playerId)}</strong> may use their <strong>{powerWindow.cardRank}</strong> power… <span className="power-countdown">{powerSecs}s</span></span>
+            : <span><strong>{playerName(powerWindow.playerId)}</strong> is using their <strong>{powerWindow.cardRank}</strong> power… <span className="power-countdown">{powerSecs}s</span></span>
+          }
         </div>
       )}
 
@@ -349,6 +582,7 @@ export default function GameBoard({ gameState, myId, onError, onLeave, currentUs
             <PlayerCardGrid
               grid={p.grid}
               small
+              playerId={p.id}
               isActive={currentTurnPlayerId === p.id}
               label={
                 (p.id === kaabooCallerId ? '★ ' : '') +
@@ -361,6 +595,7 @@ export default function GameBoard({ gameState, myId, onError, onLeave, currentUs
               highlightedSlot={oppHighlighted(p.id)}
               peekedSlots={peekedByPlayer[p.id] ?? []}
               swappedSlots={swappedByPlayer[p.id] ?? []}
+              penaltySlots={penaltySlots.filter(s => s.playerId === p.id).map(s => s.position)}
             />
             {p.handSize > 0 && <div className="opponent-deciding">deciding…</div>}
             <ScoreBoardPip value={p.scoreBoard} />
@@ -413,16 +648,96 @@ export default function GameBoard({ gameState, myId, onError, onLeave, currentUs
           {isPeek && <span className="peek-hint">Bottom cards visible for {peekSecs}s</span>}
           {!isPeek && myGridHint && <span className="action-hint">{myGridHint}</span>}
         </div>
+
+        {/* Power panel — my power, shown near my cards */}
+        {powerWindow && isMyPower && (
+          <div className={`power-panel${powerPhase === 'decision' ? ' power-panel-decision' : ' power-panel-action'}`}>
+            <div className="power-rank-badge">{POWER_RANK_SYMBOL[powerWindow.cardRank]}</div>
+            <div className="power-panel-body">
+              {powerPhase === 'decision' && (
+                <>
+                  <span className="power-panel-name">{powerWindow.powerLabel}</span>
+                  <span className="power-panel-sub">Use your power?</span>
+                </>
+              )}
+              {powerPhase === 'action' && (
+                <>
+                  {powerType === 'double' && !powerWindow.swapSelection && !activePowerMode && <span className="power-panel-name">Choose your action</span>}
+                  {powerWindow.swapSelection                                                  && <span className="power-panel-name">Select the second card to swap</span>}
+                  {powerActionMode === 'peek-self'                                            && <span className="power-panel-name">Click one of your cards to peek</span>}
+                  {powerActionMode === 'peek-other'                                           && <span className="power-panel-name">Click an opponent's card to peek</span>}
+                  {powerActionMode === 'peek-any'                                             && <span className="power-panel-name">Click any card to peek</span>}
+                  {powerActionMode === 'swap-first' && !powerWindow.swapSelection             && <span className="power-panel-name">Select the first card to swap</span>}
+                </>
+              )}
+            </div>
+            <div className="power-panel-right">
+              <span className={`power-panel-secs${(powerPhase === 'decision' ? powerSecs <= 2 : powerSecs <= 5) ? ' power-countdown-urgent' : ''}`}>{powerSecs}s</span>
+              {powerPhase === 'decision' && (
+                <div className="power-decision-btns">
+                  <button className="btn-primary power-yes" onClick={usePower}>Use It</button>
+                  <button className="btn-ghost power-no" onClick={skipPower}>Skip</button>
+                </div>
+              )}
+              {powerPhase === 'action' && powerType === 'double' && !powerWindow.swapSelection && !activePowerMode && (
+                <div className="power-subpower-btns">
+                  {powerWindow.remainingPowers?.includes('peek') && <button className="btn-secondary power-sub-btn" onClick={() => setActivePowerMode('peek')}>👁 Peek</button>}
+                  {powerWindow.remainingPowers?.includes('swap') && <button className="btn-secondary power-sub-btn" onClick={() => setActivePowerMode('swap')}>🔀 Swap</button>}
+                  <button className="btn-ghost power-sub-btn" onClick={skipRemaining}>Skip</button>
+                </div>
+              )}
+              {powerPhase === 'action' && powerType === 'double' && activePowerMode && !powerWindow.swapSelection && (
+                <button className="btn-ghost power-sub-btn" onClick={() => setActivePowerMode(null)}>← Back</button>
+              )}
+              {powerPhase === 'action' && powerType !== 'double' && (
+                <button className="btn-ghost power-sub-btn" onClick={skipRemaining}>Skip</button>
+              )}
+            </div>
+          </div>
+        )}
+
         <PlayerCardGrid
           grid={me?.grid ?? []}
+          playerId={myId}
           isActive={isMyTurn && phase === 'playing' && !playdownWindow && !giveCardWindow && !powerWindow}
           selectable={myGridSelectable}
           onSlotClick={myGridClick}
           highlightedSlot={myHighlighted}
           peekedSlots={peekedByPlayer[myId] ?? []}
           swappedSlots={swappedByPlayer[myId] ?? []}
+          penaltySlots={penaltySlots.filter(s => s.playerId === myId).map(s => s.position)}
         />
       </div>
+
+      {/* ── Game log ─────────────────────────────────────────────────────── */}
+      <GameLog logs={logs} />
+
+      {/* ── Swap animation overlay ────────────────────────────────────────── */}
+      {swapAnim && (
+        <SwapAnimOverlay first={swapAnim.first} second={swapAnim.second} />
+      )}
+
+      {/* ── Give-card animation overlay ───────────────────────────────────── */}
+      {giveAnim && (
+        <GiveCardAnim from={giveAnim.from} to={giveAnim.to} />
+      )}
+
+      {/* ── Peek reveal overlay ──────────────────────────────────────────── */}
+      {peekReveal && (
+        <div className="peek-reveal-overlay" onClick={() => { setPeekReveal(null); setPeekRevealExpiresAt(null); }}>
+          <div className="peek-reveal-popup" onClick={(e) => e.stopPropagation()}>
+            <div className="peek-reveal-header">
+              <span className="peek-reveal-eye">👁</span>
+              <span className="peek-reveal-title">Peeked at {peekReveal.ownerName}</span>
+              <span className={`peek-reveal-secs${peekRevealSecs <= 2 ? ' urgent' : ''}`}>{peekRevealSecs}s</span>
+            </div>
+            <div className="peek-reveal-card-display">
+              <Card card={peekReveal.card} />
+            </div>
+            <div className="peek-reveal-dismiss">tap to dismiss</div>
+          </div>
+        </div>
+      )}
 
       {/* ── End-game overlay ─────────────────────────────────────────────── */}
       {isFinished && finalResult && (

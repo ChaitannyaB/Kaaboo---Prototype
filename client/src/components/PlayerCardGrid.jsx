@@ -15,10 +15,11 @@ import Card from './Card';
  */
 export default function PlayerCardGrid({
   grid = [], small, label, isActive, selectable, onSlotClick, hint,
-  highlightedSlot, peekedSlots = [], swappedSlots = [],
+  highlightedSlot, peekedSlots = [], swappedSlots = [], penaltySlots = [], playerId,
 }) {
   const peekedSet  = new Set(peekedSlots);
   const swappedSet = new Set(swappedSlots);
+  const penaltySet = new Set(penaltySlots);
 
   return (
     <div className={[
@@ -35,12 +36,15 @@ export default function PlayerCardGrid({
           return (
             <div
               key={slot.position}
+              data-player={playerId}
+              data-slot={slot.position}
               className={[
                 'card-slot-wrap',
                 canClick && 'card-slot-target',
                 slot.position === highlightedSlot && 'card-slot-highlighted',
-                peekedSet.has(slot.position)  && 'card-slot-peeked',
-                swappedSet.has(slot.position) && 'card-slot-swapped',
+                peekedSet.has(slot.position)   && 'card-slot-peeked',
+                swappedSet.has(slot.position)  && 'card-slot-swapped',
+                penaltySet.has(slot.position)  && 'card-slot-penalty',
               ].filter(Boolean).join(' ')}
               onClick={canClick ? () => onSlotClick(slot.position) : undefined}
               title={canClick ? 'Play this card down' : undefined}
