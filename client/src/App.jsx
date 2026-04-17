@@ -1,8 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, lazy, Suspense } from 'react';
 import socket from './socket';
-import Auth from './components/Auth';
-import Lobby from './components/Lobby';
-import GameBoard from './components/GameBoard';
+const Auth = lazy(() => import('./components/Auth'));
+const Lobby = lazy(() => import('./components/Lobby'));
+const GameBoard = lazy(() => import('./components/GameBoard'));
 
 export default function App() {
   const [screen, setScreen] = useState('auth'); // 'auth' | 'lobby' | 'game'
@@ -100,31 +100,33 @@ export default function App() {
         </div>
       )}
 
-      {screen === 'auth' && (
-        <Auth onLogin={handleLogin} />
-      )}
+      <Suspense fallback={<div className="loading">Loading…</div>}>
+        {screen === 'auth' && (
+          <Auth onLogin={handleLogin} />
+        )}
 
-      {screen === 'lobby' && (
-        <Lobby
-          currentUser={currentUser}
-          mySocketId={myId}
-          gameState={gameState}
-          onError={setError}
-          onLogout={handleLogout}
-          onLeaveRoom={handleLeaveRoom}
-        />
-      )}
+        {screen === 'lobby' && (
+          <Lobby
+            currentUser={currentUser}
+            mySocketId={myId}
+            gameState={gameState}
+            onError={setError}
+            onLogout={handleLogout}
+            onLeaveRoom={handleLeaveRoom}
+          />
+        )}
 
-      {screen === 'game' && (
-        <GameBoard
-          gameState={gameState}
-          myId={myId}
-          onError={setError}
-          onLeave={handleLeaveGame}
-          currentUser={currentUser}
-          onLogout={handleLogout}
-        />
-      )}
+        {screen === 'game' && (
+          <GameBoard
+            gameState={gameState}
+            myId={myId}
+            onError={setError}
+            onLeave={handleLeaveGame}
+            currentUser={currentUser}
+            onLogout={handleLogout}
+          />
+        )}
+      </Suspense>
     </div>
   );
 }
