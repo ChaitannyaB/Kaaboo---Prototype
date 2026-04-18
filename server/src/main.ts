@@ -4,6 +4,7 @@ import { ValidationPipe } from '@nestjs/common';
 import { AppModule } from './app.module';
 import { IoAdapter } from '@nestjs/platform-socket.io';
 import { ServerOptions } from 'socket.io';
+import helmet from 'helmet';
 
 class SocketIoAdapter extends IoAdapter {
   createIOServer(port: number, options?: ServerOptions) {
@@ -34,6 +35,7 @@ function validateEnv() {
 async function bootstrap() {
   validateEnv();
   const app = await NestFactory.create(AppModule);
+  app.use(helmet());
   const allowedOrigin = process.env.CLIENT_URL ?? 'http://localhost:5173';
   app.enableCors({ origin: allowedOrigin, credentials: true });
   app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));

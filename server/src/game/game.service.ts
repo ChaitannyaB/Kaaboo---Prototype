@@ -142,7 +142,7 @@ export class GameService implements OnApplicationShutdown {
 
       this.advanceTurnAndCheck(roomId);
       console.log(`[pd] ${roomId} window expired`);
-    }, 8_000));
+    }, 3_000));
   }
 
   openGiveCard(roomId: string, giverId: string, receiverId: string) {
