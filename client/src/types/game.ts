@@ -28,6 +28,7 @@ export interface PlayerPublic {
   isHost: boolean;
   score: number;
   scoreBoard: number;
+  sessionScoreBoard: number;
   handSize: number;
   grid: GridSlotPrivate[];
 }
