@@ -18,6 +18,7 @@ export default function App() {
     if (savedToken && savedUser) {
       try {
         const user = JSON.parse(savedUser);
+        if (!user?.id || !user?.username) throw new Error('Invalid session data');
         setCurrentUser(user);
         setScreen('lobby');
         socket.connect();

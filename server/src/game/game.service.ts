@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, OnApplicationShutdown } from '@nestjs/common';
 import { Server } from 'socket.io';
 import { PrismaService } from '../prisma/prisma.service';
 import { GameRoom, getPowerInfo } from './models/game-room';
@@ -16,7 +16,7 @@ function emptyRoundStat(): RoundStat {
 }
 
 @Injectable()
-export class GameService {
+export class GameService implements OnApplicationShutdown {
   // Exposed so GameGateway and UsersService can access them
   readonly rooms = new Map<string, GameRoom>();
   readonly onlineUsers = new Map<string, string>(); // userId -> socketId
@@ -28,8 +28,41 @@ export class GameService {
   private readonly gcTimers = new Map<string, NodeJS.Timeout>();
   private readonly pdecTimers = new Map<string, NodeJS.Timeout>();
   private readonly pactTimers = new Map<string, NodeJS.Timeout>();
+  private sweepInterval: NodeJS.Timeout | null = null;
 
-  constructor(private prisma: PrismaService) {}
+  constructor(private prisma: PrismaService) {
+    this.sweepInterval = setInterval(() => this.sweepOrphanedRooms(), 60_000);
+    // Purge stale pending game invites on startup and every hour
+    this.purgeStaleInvites();
+    setInterval(() => this.purgeStaleInvites(), 60 * 60_000);
+  }
+
+  onApplicationShutdown() {
+    if (this.sweepInterval) clearInterval(this.sweepInterval);
+    for (const [id] of this.rooms) this.cleanupRoom(id);
+    if (this.server) {
+      this.server.emit('server-shutdown', { message: 'Server is restarting' });
+      this.server.disconnectSockets(true);
+    }
+  }
+
+  private sweepOrphanedRooms() {
+    const staleMs = 5 * 60_000;
+    const now = Date.now();
+    for (const [id, room] of this.rooms) {
+      if (room.phase === 'finished' && room.finishedAt && now - room.finishedAt > staleMs) {
+        this.cleanupRoom(id);
+        console.log(`[room] ${id} swept (finished > 5 min ago)`);
+      }
+    }
+  }
+
+  private purgeStaleInvites() {
+    const cutoff = new Date(Date.now() - 10 * 60_000);
+    this.prisma.gameInvite
+      .deleteMany({ where: { createdAt: { lt: cutoff }, status: 'PENDING' } })
+      .catch((err) => console.error('[cleanup] invite purge failed:', err));
+  }
 
   setServer(server: Server) { this.server = server; }
 
@@ -211,54 +244,64 @@ export class GameService {
     const rs = this.roundStats.get(roomId);
     if (!rs) return;
 
-    await Promise.all(
-      room.players
-        .filter((p) => p.userId)
-        .map(async (player) => {
-          const stat = rs.get(player.id) ?? emptyRoundStat();
-          const cardScore = room.calculatePlayerScore(player.id) ?? 0;
-          const isCaller = room.kaabooCallerId === player.id;
+    const eligiblePlayers = room.players.filter((p) => p.userId);
 
-          const existing = await this.prisma.userStats.findUnique({ where: { userId: player.userId } });
-          let newBestScore: number | null = existing?.bestCardScore ?? null;
-          if (isCaller) {
-            newBestScore = newBestScore == null ? cardScore : Math.min(newBestScore, cardScore);
-          }
-
-          await this.prisma.userStats.upsert({
-            where: { userId: player.userId },
-            create: {
-              userId: player.userId,
-              roundsPlayed: 1,
-              kaabooCalls: isCaller ? 1 : 0,
-              kaabooWins: isCaller && room._kaabooCallerWon ? 1 : 0,
-              kaabooLosses: isCaller && !room._kaabooCallerWon ? 1 : 0,
-              playdownsAttempted: stat.playdownsAttempted,
-              playdownsSucceeded: stat.playdownsSucceeded,
-              penaltiesReceived: stat.penaltiesReceived,
-              powersUsed: stat.powersUsed,
-              powersSkipped: stat.powersSkipped,
-              bestCardScore: isCaller ? cardScore : null,
-              totalCardScore: cardScore,
-            },
-            update: {
-              roundsPlayed: { increment: 1 },
-              kaabooCalls: { increment: isCaller ? 1 : 0 },
-              kaabooWins: { increment: isCaller && room._kaabooCallerWon ? 1 : 0 },
-              kaabooLosses: { increment: isCaller && !room._kaabooCallerWon ? 1 : 0 },
-              playdownsAttempted: { increment: stat.playdownsAttempted },
-              playdownsSucceeded: { increment: stat.playdownsSucceeded },
-              penaltiesReceived: { increment: stat.penaltiesReceived },
-              powersUsed: { increment: stat.powersUsed },
-              powersSkipped: { increment: stat.powersSkipped },
-              bestCardScore: newBestScore,
-              totalCardScore: { increment: cardScore },
-            },
-          });
+    // Fetch existing bestCardScore for all players in parallel before opening a transaction
+    const existingStats = await Promise.all(
+      eligiblePlayers.map((p) =>
+        this.prisma.userStats.findUnique({
+          where: { userId: p.userId },
+          select: { bestCardScore: true },
         }),
+      ),
     );
 
+    const ops = eligiblePlayers.map((player, i) => {
+      const stat = rs.get(player.id) ?? emptyRoundStat();
+      const cardScore = room.calculatePlayerScore(player.id);
+      const isCaller = room.kaabooCallerId === player.id;
+      const existing = existingStats[i];
+
+      let newBestScore: number | null = existing?.bestCardScore ?? null;
+      if (isCaller) {
+        newBestScore = newBestScore == null ? cardScore : Math.min(newBestScore, cardScore);
+      }
+
+      return this.prisma.userStats.upsert({
+        where: { userId: player.userId },
+        create: {
+          userId: player.userId,
+          roundsPlayed: 1,
+          kaabooCalls: isCaller ? 1 : 0,
+          kaabooWins: isCaller && room._kaabooCallerWon ? 1 : 0,
+          kaabooLosses: isCaller && !room._kaabooCallerWon ? 1 : 0,
+          playdownsAttempted: stat.playdownsAttempted,
+          playdownsSucceeded: stat.playdownsSucceeded,
+          penaltiesReceived: stat.penaltiesReceived,
+          powersUsed: stat.powersUsed,
+          powersSkipped: stat.powersSkipped,
+          bestCardScore: isCaller ? cardScore : null,
+          totalCardScore: cardScore,
+        },
+        update: {
+          roundsPlayed: { increment: 1 },
+          kaabooCalls: { increment: isCaller ? 1 : 0 },
+          kaabooWins: { increment: isCaller && room._kaabooCallerWon ? 1 : 0 },
+          kaabooLosses: { increment: isCaller && !room._kaabooCallerWon ? 1 : 0 },
+          playdownsAttempted: { increment: stat.playdownsAttempted },
+          playdownsSucceeded: { increment: stat.playdownsSucceeded },
+          penaltiesReceived: { increment: stat.penaltiesReceived },
+          powersUsed: { increment: stat.powersUsed },
+          powersSkipped: { increment: stat.powersSkipped },
+          bestCardScore: newBestScore,
+          totalCardScore: { increment: cardScore },
+        },
+      });
+    });
+
+    // All upserts in a single transaction — partial failure rolls back everything
+    await this.prisma.$transaction(ops);
     this.roundStats.delete(roomId);
-    console.log(`[stats] flushed round stats for ${roomId}`);
+    console.log(`[stats] flushed round stats for ${roomId} (${eligiblePlayers.length} players)`);
   }
 }

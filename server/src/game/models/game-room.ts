@@ -59,6 +59,7 @@ export class GameRoom {
   peekEndsAt: number | null;
   kaabooCallerId: string | null;
   _kaabooCallerWon: boolean | null;
+  finishedAt: number | null;
   playdownWindow: PlaydownWindow | null;
   giveCardWindow: GiveCardWindow | null;
   powerWindow: PowerWindow | null;
@@ -86,6 +87,7 @@ export class GameRoom {
     this.peekEndsAt = null;
     this.kaabooCallerId = null;
     this._kaabooCallerWon = null;
+    this.finishedAt = null;
     this.playdownWindow = null;
     this.giveCardWindow = null;
     this.powerWindow = null;
@@ -125,6 +127,7 @@ export class GameRoom {
     this.roundNumber++;
     this.kaabooCallerId = null;
     this._kaabooCallerWon = null;
+    this.finishedAt = null;
     this._lastDiscard = null;
     this.playdownWindow = null;
     this.giveCardWindow = null;
@@ -184,6 +187,7 @@ export class GameRoom {
   endGame() {
     if (this.phase !== 'playing') return;
     this.phase = 'finished';
+    this.finishedAt = Date.now();
     this.playdownWindow = null;
     this.giveCardWindow = null;
     this.powerWindow = null;
@@ -193,7 +197,7 @@ export class GameRoom {
       .filter((p) => p.id !== this.kaabooCallerId)
       .map((p) => this.calculatePlayerScore(p.id));
 
-    const minOther = Math.min(...otherScores);
+    const minOther = otherScores.length > 0 ? Math.min(...otherScores) : Infinity;
     this._kaabooCallerWon = callerScore < minOther;
 
     const caller = this.players.find((p) => p.id === this.kaabooCallerId);
@@ -439,7 +443,7 @@ export class GameRoom {
 
   calculatePlayerScore(playerId: string): number {
     const player = this.players.find((p) => p.id === playerId);
-    if (!player) return null;
+    if (!player) return 0;
     return player.grid.reduce((sum, s) => sum + (s.card ? cardValue(s.card) : 0), 0);
   }
 

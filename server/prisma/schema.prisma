@@ -33,6 +33,8 @@ model Friendship {
   addressee User @relation("Addressee", fields: [addresseeId], references: [id], onDelete: Cascade)
 
   @@unique([requesterId, addresseeId])
+  @@index([requesterId, status])
+  @@index([addresseeId, status])
 }
 
 enum FriendshipStatus {
@@ -50,6 +52,9 @@ model GameInvite {
 
   inviter User @relation("Inviter", fields: [inviterId], references: [id], onDelete: Cascade)
   invitee User @relation("Invitee", fields: [inviteeId], references: [id], onDelete: Cascade)
+
+  @@index([createdAt])
+  @@index([inviteeId, status])
 }
 
 enum InviteStatus {

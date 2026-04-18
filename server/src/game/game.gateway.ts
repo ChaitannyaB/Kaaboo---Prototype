@@ -3,12 +3,25 @@ import {
   OnGatewayInit, OnGatewayConnection, OnGatewayDisconnect,
   ConnectedSocket, MessageBody,
 } from '@nestjs/websockets';
+import { UseGuards, UsePipes, ValidationPipe } from '@nestjs/common';
 import { Server, Socket } from 'socket.io';
 import * as jwt from 'jsonwebtoken';
 import { GameService } from './game.service';
 import { GameRoom } from './models/game-room';
+import { WsAuthGuard } from './guards/ws-auth.guard';
+import { PlayDownDto } from './dto/play-down.dto';
+import { ReplaceGridCardDto } from './dto/replace-grid-card.dto';
+import { GiveCardDto } from './dto/give-card.dto';
 
-@WebSocketGateway({ cors: { origin: '*', methods: ['GET', 'POST'] }, transports: ['websocket', 'polling'] })
+@WebSocketGateway({
+  cors: {
+    origin: process.env.CLIENT_URL ?? 'http://localhost:5173',
+    credentials: true,
+    methods: ['GET', 'POST'],
+  },
+  transports: ['websocket', 'polling'],
+})
+@UsePipes(new ValidationPipe({ transform: true, whitelist: true }))
 export class GameGateway implements OnGatewayInit, OnGatewayConnection, OnGatewayDisconnect {
   @WebSocketServer()
   server: Server;
@@ -17,7 +30,7 @@ export class GameGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
 
   afterInit(server: Server) {
     this.gameService.setServer(server);
-    const jwtSecret = process.env.JWT_SECRET || 'kaaboo-dev-secret-change-in-prod';
+    const jwtSecret = process.env.JWT_SECRET!;
     server.use((socket: Socket, next) => {
       const token = socket.handshake.auth?.token;
       if (token) {
@@ -25,7 +38,7 @@ export class GameGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
           const decoded = jwt.verify(token, jwtSecret) as any;
           socket.data.userId = decoded.userId;
           socket.data.username = decoded.username;
-        } catch { /* unauthenticated — allowed */ }
+        } catch { /* unauthenticated — socket connects but handlers enforce auth */ }
       }
       next();
     });
@@ -192,28 +205,30 @@ export class GameGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
   }
 
   @SubscribeMessage('replace-grid-card')
+  @UseGuards(WsAuthGuard)
   handleReplaceGridCard(
     @ConnectedSocket() socket: Socket,
-    @MessageBody() data: { gridPosition: string },
+    @MessageBody() data: ReplaceGridCardDto,
   ) {
     const room = this.gameService.rooms.get(socket.data.roomId);
     if (!room) return { error: 'Not in a room' };
     if (room.phase !== 'playing') return { error: 'Not in playing phase' };
     if (room.currentTurnPlayerId !== socket.id) return { error: 'Not your turn' };
-    const result = room.replaceGridCard(socket.id, data?.gridPosition);
+    const result = room.replaceGridCard(socket.id, data.gridPosition);
     if (result.error) return result;
     this.gameService.openPlaydown(socket.data.roomId, result.discardType, socket.id);
     return { ok: true };
   }
 
   @SubscribeMessage('play-down')
+  @UseGuards(WsAuthGuard)
   handlePlayDown(
     @ConnectedSocket() socket: Socket,
-    @MessageBody() data: { cardOwnerId: string; gridPosition: string },
+    @MessageBody() data: PlayDownDto,
   ) {
     const room = this.gameService.rooms.get(socket.data.roomId);
     if (!room) return { error: 'Not in a room' };
-    const result = room.attemptPlayDown(socket.id, data?.cardOwnerId, data?.gridPosition);
+    const result = room.attemptPlayDown(socket.id, data.cardOwnerId, data.gridPosition);
     if (result.error) return result;
 
     const rs = this.gameService.roundStats.get(socket.data.roomId);
@@ -243,13 +258,14 @@ export class GameGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
   }
 
   @SubscribeMessage('give-card')
+  @UseGuards(WsAuthGuard)
   handleGiveCard(
     @ConnectedSocket() socket: Socket,
-    @MessageBody() data: { gridPosition: string },
+    @MessageBody() data: GiveCardDto,
   ) {
     const room = this.gameService.rooms.get(socket.data.roomId);
     if (!room) return { error: 'Not in a room' };
-    const result = room.giveCard(socket.id, data?.gridPosition);
+    const result = room.giveCard(socket.id, data.gridPosition);
     if (result.error) return result;
     this.gameService.advanceTurnAndCheck(socket.data.roomId);
     return { ok: true };
