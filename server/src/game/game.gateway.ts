@@ -8,7 +8,7 @@ import * as jwt from 'jsonwebtoken';
 import { GameService } from './game.service';
 import { GameRoom } from './models/game-room';
 
-@WebSocketGateway({ cors: { origin: '*', methods: ['GET', 'POST'] } })
+@WebSocketGateway({ cors: { origin: '*', methods: ['GET', 'POST'] }, transports: ['websocket', 'polling'] })
 export class GameGateway implements OnGatewayInit, OnGatewayConnection, OnGatewayDisconnect {
   @WebSocketServer()
   server: Server;
@@ -41,7 +41,7 @@ export class GameGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
   }
 
   handleDisconnect(socket: Socket) {
-    console.log(`[-] ${socket.id}`);
+    console.log(`[-] ${socket.id} reason=${(socket as any).disconnectReason ?? 'unknown'}`);
     if (socket.data.userId) {
       this.gameService.notifyFriendsPresence(socket.data.userId, false).catch(() => {});
       this.gameService.onlineUsers.delete(socket.data.userId);

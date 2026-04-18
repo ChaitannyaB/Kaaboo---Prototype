@@ -46,10 +46,21 @@ export default function App() {
       }
     });
 
-    socket.on('disconnect', () => {
+    socket.on('disconnect', (reason) => {
+      console.warn('[socket] disconnect reason:', reason);
       setScreen((s) => s === 'auth' ? s : 'lobby');
       setGameState(null);
-      setError('Disconnected from server.');
+      setError('Disconnected from server. Reconnecting…');
+    });
+
+    socket.on('connect_error', (err) => {
+      console.warn('[socket] connect_error:', err.message);
+      setError(`Connection error: ${err.message}`);
+    });
+
+    socket.on('reconnect', (attempt) => {
+      console.log('[socket] reconnected after', attempt, 'attempt(s)');
+      setError('');
     });
 
     return () => {
@@ -57,6 +68,8 @@ export default function App() {
       socket.off('me');
       socket.off('game-state');
       socket.off('disconnect');
+      socket.off('connect_error');
+      socket.off('reconnect');
     };
   }, []);
 
