@@ -14,6 +14,7 @@ export interface Player {
   hand: Card[];
   score: number;
   scoreBoard: number;
+  sessionScoreBoard: number;
 }
 interface PlaydownWindow {
   endsAt: number;
@@ -104,7 +105,7 @@ export class GameRoom {
   addPlayer(socketId: string, name: string, isHost = false, userId: string | null = null, scoreBoard = 0) {
     if (this.players.length >= 8) return { error: 'Room is full' };
     if (this.phase !== 'lobby') return { error: 'Game already in progress' };
-    this.players.push({ id: socketId, userId, name, isHost, grid: [], hand: [], score: 0, scoreBoard });
+    this.players.push({ id: socketId, userId, name, isHost, grid: [], hand: [], score: 0, scoreBoard, sessionScoreBoard: 0 });
     return { ok: true };
   }
 
@@ -201,7 +202,11 @@ export class GameRoom {
     this._kaabooCallerWon = callerScore < minOther;
 
     const caller = this.players.find((p) => p.id === this.kaabooCallerId);
-    if (caller) caller.scoreBoard += this._kaabooCallerWon ? 1 : -1;
+    if (caller) {
+      const delta = this._kaabooCallerWon ? 1 : -1;
+      caller.scoreBoard += delta;
+      caller.sessionScoreBoard += delta;
+    }
   }
 
   // ── Deck ───────────────────────────────────────────────────────────────────
@@ -509,7 +514,7 @@ export class GameRoom {
                 id: p.id,
                 name: p.name,
                 cardScore: this.calculatePlayerScore(p.id),
-                scoreBoard: p.scoreBoard,
+                scoreBoard: p.sessionScoreBoard,
               }))
               .sort((a, b) => a.cardScore - b.cardScore),
           }
@@ -520,6 +525,7 @@ export class GameRoom {
         isHost: p.isHost,
         score: p.score,
         scoreBoard: p.scoreBoard,
+        sessionScoreBoard: p.sessionScoreBoard,
         handSize: p.hand.length,
         grid: p.grid.map((s) => ({ position: s.position, hasCard: s.card !== null })),
       })),
@@ -536,6 +542,7 @@ export class GameRoom {
         isHost: p.isHost,
         score: p.score,
         scoreBoard: p.scoreBoard,
+        sessionScoreBoard: p.sessionScoreBoard,
         handSize: p.hand.length,
         grid: p.grid.map((s) => ({
           position: s.position,

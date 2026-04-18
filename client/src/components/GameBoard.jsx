@@ -685,7 +685,7 @@ export default function GameBoard({ gameState, myId, onError, onLeave, currentUs
               replacedSlots={replacedSlot?.playerId === p.id ? [replacedSlot.position] : []}
             />
             {p.handSize > 0 && <div className="opponent-deciding">deciding…</div>}
-            <ScoreBoardPip value={p.scoreBoard} />
+            <ScoreBoardPip value={p.sessionScoreBoard ?? 0} />
           </div>
         ))}
       </div>
@@ -733,7 +733,7 @@ export default function GameBoard({ gameState, myId, onError, onLeave, currentUs
             {amKaabooCallerBadge && <span className="kaaboo-caller-badge">★ KAABOO</span>}
             {me?.name ?? 'You'}{me?.isHost && ' 👑'}
           </span>
-          <ScoreBoardPip value={me?.scoreBoard ?? 0} />
+          <ScoreBoardPip value={me?.sessionScoreBoard ?? 0} />
           {isPeek && <span className="peek-hint">Bottom cards visible for {peekSecs}s</span>}
           {!isPeek && myGridHint && <span className="action-hint">{myGridHint}</span>}
         </div>

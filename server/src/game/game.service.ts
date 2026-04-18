@@ -115,6 +115,20 @@ export class GameService implements OnApplicationShutdown {
     this.broadcastRoom(roomId);
   }
 
+  afterPlaydownClose(roomId: string): void {
+    const r = this.rooms.get(roomId);
+    if (!r) return;
+    const ld = r._lastDiscard;
+    if (ld?.wasDrawn && getPowerInfo(ld.rank)) {
+      if (r.openPowerDecisionWindow(r.currentTurnPlayerId, ld.rank)) {
+        this.broadcastRoom(roomId);
+        this.startPowerDecisionTimer(roomId);
+        return;
+      }
+    }
+    this.advanceTurnAndCheck(roomId);
+  }
+
   // ── Timer helpers ───────────────────────────────────────────────────────────
 
   openPlaydown(roomId: string, discardType: string, currentTurnPlayerId: string) {
@@ -130,17 +144,7 @@ export class GameService implements OnApplicationShutdown {
       if (!r?.playdownWindow) return;
 
       r.closePlaydownWindow();
-
-      const ld = r._lastDiscard;
-      if (ld?.wasDrawn && getPowerInfo(ld.rank)) {
-        if (r.openPowerDecisionWindow(r.currentTurnPlayerId, ld.rank)) {
-          this.broadcastRoom(roomId);
-          this.startPowerDecisionTimer(roomId);
-          return;
-        }
-      }
-
-      this.advanceTurnAndCheck(roomId);
+      this.afterPlaydownClose(roomId);
       console.log(`[pd] ${roomId} window expired`);
     }, 8_000));
   }
@@ -157,7 +161,7 @@ export class GameService implements OnApplicationShutdown {
       this.gcTimers.delete(roomId);
       if (!r?.giveCardWindow) return;
       r.giveRandomCard();
-      this.advanceTurnAndCheck(roomId);
+      this.afterPlaydownClose(roomId);
       console.log(`[gc] ${roomId} timeout — random card given`);
     }, 5_000));
   }
@@ -195,6 +199,17 @@ export class GameService implements OnApplicationShutdown {
     if (!r) return;
     r.closePowerWindow();
     this.advanceTurnAndCheck(roomId);
+  }
+
+  resolvePowerAfterDelay(roomId: string, delayMs: number) {
+    clearTimeout(this.pactTimers.get(roomId));
+    this.pactTimers.set(roomId, setTimeout(() => {
+      this.pactTimers.delete(roomId);
+      const r = this.rooms.get(roomId);
+      if (!r?.powerWindow) return;
+      r.closePowerWindow();
+      this.advanceTurnAndCheck(roomId);
+    }, delayMs));
   }
 
   clearPlaydownTimer(roomId: string) {

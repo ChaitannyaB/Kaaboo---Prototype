@@ -253,7 +253,7 @@ export class GameGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
       return { ok: true, giveCard: true };
     }
 
-    this.gameService.advanceTurnAndCheck(socket.data.roomId);
+    this.gameService.afterPlaydownClose(socket.data.roomId);
     return { ok: true, giveCard: false };
   }
 
@@ -267,7 +267,7 @@ export class GameGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
     if (!room) return { error: 'Not in a room' };
     const result = room.giveCard(socket.id, data.gridPosition);
     if (result.error) return result;
-    this.gameService.advanceTurnAndCheck(socket.data.roomId);
+    this.gameService.afterPlaydownClose(socket.data.roomId);
     return { ok: true };
   }
 
@@ -311,7 +311,7 @@ export class GameGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
     const result = room.powerPeek(socket.id, data?.targetPlayerId, data?.gridPosition);
     if (result.error) return result;
     this.gameService.broadcastRoom(socket.data.roomId);
-    if (result.complete) this.gameService.resolvePower(socket.data.roomId);
+    if (result.complete) this.gameService.resolvePowerAfterDelay(socket.data.roomId, 2000);
     return { ok: true, complete: result.complete };
   }
 
