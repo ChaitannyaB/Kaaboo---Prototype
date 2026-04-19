@@ -1,9 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
-import { App, Badge, Button, Collapse, Input, List, Popconfirm, Tabs, Tag } from 'antd';
-import { LeftOutlined, RightOutlined, UserAddOutlined } from '@ant-design/icons';
-import clsx from 'clsx';
-import { useNavigate } from 'react-router-dom';
-import { useFriends, useFriendRequests, useRemoveFriend, useRespondToRequest, useSearchUsers, useSendFriendRequest } from '@/api/queries/friends';
+import {
+  useFriends,
+  useFriendRequests,
+  useRemoveFriend,
+  useRespondToRequest,
+  useSearchUsers,
+  useSendFriendRequest,
+} from '@/api/queries/friends';
 import { useDismissInvite, useInvites, useSendInvite } from '@/api/queries/invites';
 import { useGameStore } from '@/stores/gameStore';
 import { useSocketStore } from '@/stores/socketStore';
@@ -19,9 +22,12 @@ function useDebounced<T>(value: T, delay: number): T {
   return v;
 }
 
-export function Friends() {
-  const navigate = useNavigate();
-  const { message } = App.useApp();
+interface FriendsProps {
+  onJoinRoom?: (roomId: string) => void;
+  onInviteSent?: () => void;
+}
+
+export function Friends({ onJoinRoom, onInviteSent }: FriendsProps = {}) {
   const gameState = useGameStore((s) => s.gameState);
   const mySocketId = useSocketStore((s) => s.myId);
   const collapsed = useUiStore((s) => s.socialCollapsed);
@@ -34,8 +40,11 @@ export function Friends() {
   const [searchQuery, setSearchQuery] = useState('');
   const debouncedQuery = useDebounced(searchQuery, 400);
   const searchQ = useSearchUsers(debouncedQuery);
+
   const [expandedStats, setExpandedStats] = useState<string | null>(null);
   const [inviteSent, setInviteSent] = useState<Set<string>>(new Set());
+  const [pendingAdd, setPendingAdd] = useState<Set<string>>(new Set());
+  const [errors, setErrors] = useState<Record<string, string>>({});
 
   const sendRequest = useSendFriendRequest();
   const respond = useRespondToRequest();
@@ -61,19 +70,30 @@ export function Friends() {
     });
   }, [friends]);
 
-  async function handleAdd(userId: string) {
-    try { await sendRequest.mutateAsync(userId); message.success('Request sent'); }
-    catch (e) { message.error((e as Error).message); }
+  async function handleAddFriend(userId: string) {
+    try {
+      await sendRequest.mutateAsync(userId);
+      setPendingAdd((s) => new Set([...s, userId]));
+    } catch (err) {
+      setErrors((e) => ({ ...e, [userId]: (err as Error).message }));
+    }
+  }
+
+  async function handleRemoveFriend(friendshipId: string, friendId: string) {
+    try {
+      await removeFriend.mutateAsync(friendshipId);
+      if (expandedStats === friendId) setExpandedStats(null);
+    } catch (err) {
+      setErrors((e) => ({ ...e, [`remove_${friendId}`]: (err as Error).message }));
+    }
   }
 
   async function handleRespond(id: string, action: 'accept' | 'decline') {
-    try { await respond.mutateAsync({ id, action }); }
-    catch (e) { message.error((e as Error).message); }
-  }
-
-  async function handleRemove(friendshipId: string) {
-    try { await removeFriend.mutateAsync(friendshipId); }
-    catch (e) { message.error((e as Error).message); }
+    try {
+      await respond.mutateAsync({ id, action });
+    } catch (err) {
+      setErrors((e) => ({ ...e, [id]: (err as Error).message }));
+    }
   }
 
   async function handleInvite(friendId: string) {
@@ -81,176 +101,172 @@ export function Friends() {
     try {
       await sendInvite.mutateAsync({ roomId: gameState.roomId, inviteeId: friendId });
       setInviteSent((s) => new Set([...s, friendId]));
-      message.success('Invite sent');
-    } catch (e) { message.error((e as Error).message); }
+      onInviteSent?.();
+    } catch (err) {
+      setErrors((e) => ({ ...e, [`invite_${friendId}`]: (err as Error).message }));
+    }
   }
 
-  function handleJoin(roomId: string, inviteId: string) {
+  function handleJoinInvite(roomId: string, inviteId: string) {
     void dismissInvite.mutateAsync(inviteId);
-    navigate(`/lobby/room/${roomId}`);
+    onJoinRoom?.(roomId);
+  }
+
+  function handleDismissInvite(inviteId: string) {
+    void dismissInvite.mutateAsync(inviteId);
   }
 
   return (
-    <div className={clsx('friends-panel', collapsed && 'collapsed')}>
-      <div className="friends-panel-header flex items-center justify-between gap-2 px-3 py-2">
-        <h2 className="friends-panel-title text-base font-semibold">Social</h2>
-        <div className="flex items-center gap-2">
-          {collapsed && notifCount > 0 && <Badge count={notifCount} />}
-          <Button
-            size="small"
-            type="text"
-            icon={collapsed ? <RightOutlined /> : <LeftOutlined />}
-            onClick={toggleCollapsed}
-            title={collapsed ? 'Expand' : 'Collapse'}
-          />
-        </div>
+    <div className={`friends-panel${collapsed ? ' collapsed' : ''}`}>
+      <div className="friends-panel-header">
+        <h2 className="friends-panel-title">Social</h2>
+        {collapsed && notifCount > 0 && <span className="notif-badge">{notifCount}</span>}
+        <button className="friends-collapse-btn" onClick={toggleCollapsed} title={collapsed ? 'Expand' : 'Collapse'}>
+          {collapsed ? '›' : '‹'}
+        </button>
       </div>
 
-      {!collapsed && (
-        <Tabs
-          defaultActiveKey="friends"
-          items={[
-            {
-              key: 'invites',
-              label: <Badge count={invites.length} size="small" offset={[10, 0]}>Invites</Badge>,
-              children: invites.length === 0 ? (
-                <p className="friends-empty text-inkDim">No pending invites</p>
-              ) : (
-                <List
-                  dataSource={invites}
-                  renderItem={(inv) => (
-                    <List.Item
-                      actions={[
-                        <Button key="join" size="small" type="primary" onClick={() => handleJoin(inv.roomId, inv.id)}>Join</Button>,
-                        <Button key="dismiss" size="small" type="text" onClick={() => dismissInvite.mutate(inv.id)}>×</Button>,
-                      ]}
-                    >
-                      <List.Item.Meta
-                        title={inv.inviterUsername}
-                        description={<Tag color="gold">#{inv.roomId}</Tag>}
-                      />
-                    </List.Item>
-                  )}
-                />
-              ),
-            },
-            {
-              key: 'requests',
-              label: <Badge count={requests.length} size="small" offset={[10, 0]}>Requests</Badge>,
-              children: requests.length === 0 ? (
-                <p className="friends-empty text-inkDim">No pending friend requests</p>
-              ) : (
-                <List
-                  dataSource={requests}
-                  renderItem={(req) => (
-                    <List.Item
-                      actions={[
-                        <Button key="accept" size="small" type="primary" onClick={() => handleRespond(req.id, 'accept')}>Accept</Button>,
-                        <Button key="decline" size="small" onClick={() => handleRespond(req.id, 'decline')}>Decline</Button>,
-                      ]}
-                    >
-                      <List.Item.Meta title={req.username} />
-                    </List.Item>
-                  )}
-                />
-              ),
-            },
-            {
-              key: 'friends',
-              label: `Friends (${friends.length})`,
-              children: (
-                <>
-                  {sortedFriends.length === 0 ? (
-                    <p className="friends-empty text-inkDim">No friends yet. Use the search below.</p>
-                  ) : (
-                    <List
-                      dataSource={sortedFriends}
-                      renderItem={(f) => {
-                        const inGame = gameState?.players?.find((p) => p.name === f.username);
-                        const canInvite = inLobby && isHost;
-                        const alreadyInvited = inviteSent.has(f.id);
-                        return (
-                          <>
-                            <List.Item
-                              actions={[
-                                <Button key="stats" size="small" type="text" onClick={() => setExpandedStats(expandedStats === f.id ? null : f.id)}>
-                                  Stats
-                                </Button>,
-                                canInvite && (
-                                  <Button key="invite" size="small" disabled={alreadyInvited} onClick={() => handleInvite(f.id)}>
-                                    {alreadyInvited ? 'Invited' : 'Invite'}
-                                  </Button>
-                                ),
-                                <Popconfirm key="remove" title={`Remove ${f.username}?`} onConfirm={() => handleRemove(f.friendshipId)} okText="Remove" cancelText="Cancel">
-                                  <Button size="small" type="text">×</Button>
-                                </Popconfirm>,
-                              ].filter(Boolean) as React.ReactNode[]}
-                            >
-                              <List.Item.Meta
-                                title={
-                                  <span>
-                                    {f.online && <Badge status="success" />}
-                                    {f.username}
-                                    {inGame && <Tag style={{ marginLeft: 8 }}>SB {inGame.scoreBoard > 0 ? `+${inGame.scoreBoard}` : inGame.scoreBoard}</Tag>}
-                                  </span>
-                                }
-                              />
-                            </List.Item>
-                            {expandedStats === f.id && (
-                              <div className="px-4 pb-3">
-                                <StatsPanel userId={f.id} inline />
-                              </div>
-                            )}
-                          </>
-                        );
-                      }}
-                    />
-                  )}
-                  <Collapse
-                    className="mt-3"
-                    items={[{
-                      key: 'add',
-                      label: <span><UserAddOutlined /> Add Friends</span>,
-                      children: (
-                        <>
-                          <Input.Search
-                            placeholder="Search by username…"
-                            value={searchQuery}
-                            onChange={(e) => setSearchQuery(e.target.value)}
-                            allowClear
-                          />
-                          {debouncedQuery.length >= 2 && (
-                            <List
-                              className="mt-2"
-                              dataSource={searchResults}
-                              locale={{ emptyText: 'No users found' }}
-                              renderItem={(u) => {
-                                const isFriend = friendIds.has(u.id);
-                                return (
-                                  <List.Item
-                                    actions={[
-                                      isFriend
-                                        ? <Tag key="f">Friends</Tag>
-                                        : <Button key="add" size="small" onClick={() => handleAdd(u.id)}>Add</Button>,
-                                    ]}
-                                  >
-                                    <List.Item.Meta title={u.username} />
-                                  </List.Item>
-                                );
-                              }}
-                            />
-                          )}
-                        </>
-                      ),
-                    }]}
-                  />
-                </>
-              ),
-            },
-          ]}
-        />
+      {/* Game Invites */}
+      <div className="friends-section">
+        <h3 className="friends-section-title">
+          Game Invites
+          {invites.length > 0 && <span className="notif-badge">{invites.length}</span>}
+        </h3>
+        {invites.length === 0 ? (
+          <p className="friends-empty">No pending invites</p>
+        ) : (
+          invites.map((inv) => (
+            <div key={inv.id} className="invite-row">
+              <span className="invite-from">{inv.inviterUsername}</span>
+              <span className="invite-room">#{inv.roomId}</span>
+              <div className="invite-actions">
+                <button className="btn-primary invite-btn" onClick={() => handleJoinInvite(inv.roomId, inv.id)}>
+                  Join
+                </button>
+                <button className="btn-ghost invite-btn" onClick={() => handleDismissInvite(inv.id)}>
+                  ×
+                </button>
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+
+      {/* Friend Requests */}
+      {requests.length > 0 && (
+        <div className="friends-section">
+          <h3 className="friends-section-title">
+            Friend Requests
+            <span className="notif-badge">{requests.length}</span>
+          </h3>
+          {requests.map((req) => (
+            <div key={req.id} className="friend-row">
+              <span className="friend-name">{req.username}</span>
+              <div className="friend-actions">
+                <button className="btn-primary friend-btn" onClick={() => handleRespond(req.id, 'accept')}>
+                  Accept
+                </button>
+                <button className="btn-ghost friend-btn" onClick={() => handleRespond(req.id, 'decline')}>
+                  Decline
+                </button>
+              </div>
+              {errors[req.id] && <span className="friend-error">{errors[req.id]}</span>}
+            </div>
+          ))}
+        </div>
       )}
+
+      {/* Friends List */}
+      <div className="friends-section">
+        <h3 className="friends-section-title">Friends ({friends.length})</h3>
+        {sortedFriends.length === 0 ? (
+          <p className="friends-empty">No friends yet. Search below to add some!</p>
+        ) : (
+          sortedFriends.map((f) => {
+            const inGame = gameState?.players?.find((p) => p.name === f.username);
+            const canInvite = inLobby && isHost;
+            const alreadyInvited = inviteSent.has(f.id);
+            const statsOpen = expandedStats === f.id;
+            return (
+              <div key={f.id} className="friend-row" style={{ flexWrap: 'wrap' }}>
+                {f.online && <span className="friend-online-dot" title="Online" />}
+                <span className="friend-name">{f.username}</span>
+                {inGame && typeof inGame.scoreBoard === 'number' && (
+                  <span className="friend-sb-pip">
+                    SB {inGame.scoreBoard > 0 ? `+${inGame.scoreBoard}` : inGame.scoreBoard}
+                  </span>
+                )}
+                <button
+                  className={`btn-ghost friend-btn friend-stats-toggle${statsOpen ? ' active' : ''}`}
+                  onClick={() => setExpandedStats(statsOpen ? null : f.id)}
+                >
+                  Stats
+                </button>
+                {canInvite && (
+                  <button
+                    className={`btn-ghost friend-btn${alreadyInvited ? ' invited' : ''}`}
+                    disabled={alreadyInvited}
+                    onClick={() => handleInvite(f.id)}
+                  >
+                    {alreadyInvited ? 'Invited' : 'Invite'}
+                  </button>
+                )}
+                {errors[`invite_${f.id}`] && <span className="friend-error">{errors[`invite_${f.id}`]}</span>}
+                {errors[`remove_${f.id}`] && <span className="friend-error">{errors[`remove_${f.id}`]}</span>}
+                <button
+                  className="btn-ghost friend-btn friend-remove-btn"
+                  onClick={() => handleRemoveFriend(f.friendshipId, f.id)}
+                  title="Remove friend"
+                >
+                  ×
+                </button>
+                {statsOpen && (
+                  <div className="friend-stats-inline">
+                    <StatsPanel userId={f.id} inline />
+                  </div>
+                )}
+              </div>
+            );
+          })
+        )}
+      </div>
+
+      {/* Add Friends */}
+      <div className="friends-section friends-search">
+        <h3 className="friends-section-title">Add Friends</h3>
+        <input
+          className="input"
+          placeholder="Search by username…"
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+        />
+        {searchResults.length > 0 && (
+          <div className="search-results">
+            {searchResults.map((u) => {
+              const isFriend = friendIds.has(u.id);
+              const isPending = pendingAdd.has(u.id);
+              return (
+                <div key={u.id} className="search-result-row">
+                  <span className="friend-name">{u.username}</span>
+                  {isFriend ? (
+                    <span className="friends-label">Friends</span>
+                  ) : isPending ? (
+                    <span className="friends-label">Sent</span>
+                  ) : (
+                    <button className="btn-ghost friend-btn" onClick={() => handleAddFriend(u.id)}>
+                      Add
+                    </button>
+                  )}
+                  {errors[u.id] && <span className="friend-error">{errors[u.id]}</span>}
+                </div>
+              );
+            })}
+          </div>
+        )}
+        {debouncedQuery.length >= 2 && searchResults.length === 0 && (
+          <p className="friends-empty">No users found</p>
+        )}
+      </div>
     </div>
   );
 }
-

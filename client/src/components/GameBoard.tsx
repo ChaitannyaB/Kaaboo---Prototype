@@ -1,9 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { flushSync } from 'react-dom';
-import { App, Badge, Button, Modal } from 'antd';
-import { MessageOutlined, QuestionCircleOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
-import clsx from 'clsx';
 import { Card } from './Card';
 import { PlayerCardGrid } from './PlayerCardGrid';
 import { StatsPanel } from './StatsPanel';
@@ -37,7 +34,6 @@ type DoublePowerPick = null | 'peek' | 'swap';
 interface Rect { top: number; left: number; width: number; height: number; }
 
 export function GamePage() {
-  const { message } = App.useApp();
   const navigate = useNavigate();
   const gameState = useGameStore((s) => s.gameState);
   const myId = useSocketStore((s) => s.myId);
@@ -47,6 +43,12 @@ export function GamePage() {
   const setRulesOpen = useUiStore((s) => s.setRulesOpen);
   const chatOpen = useUiStore((s) => s.chatOpen);
   const setChatOpen = useUiStore((s) => s.setChatOpen);
+  const [errorMsg, setErrorMsg] = useState('');
+  useEffect(() => {
+    if (!errorMsg) return;
+    const t = window.setTimeout(() => setErrorMsg(''), 4000);
+    return () => window.clearTimeout(t);
+  }, [errorMsg]);
 
   const peekSecs     = useCountdown(gameState?.peekEndsAt ?? null);
   const playdownSecs = useCountdown(gameState?.playdownWindow?.endsAt ?? null);
@@ -313,7 +315,7 @@ export function GamePage() {
   })();
 
   const socket = getSocket();
-  const onErr = (msg?: string) => { if (msg) message.error(msg); };
+  const onErr = (msg?: string) => { if (msg) setErrorMsg(msg); };
 
   const drawCard      = () => socket.emit('draw-card', (r) => onErr(r?.error));
   const discardDrawn  = () => socket.emit('discard-drawn-card', (r) => onErr(r?.error));
@@ -392,7 +394,8 @@ export function GamePage() {
 
   return (
     <div className="gameboard">
-      <RulesModal open={rulesOpen} onClose={() => setRulesOpen(false)} />
+      {errorMsg && <div className="error-banner">{errorMsg}</div>}
+      {rulesOpen && <RulesModal onClose={() => setRulesOpen(false)} />}
       <PlayerToasts players={players} />
       <ChatPanel
         myName={currentUser?.username ?? ''}
@@ -401,7 +404,7 @@ export function GamePage() {
         onUnread={() => setChatUnread((n) => n + 1)}
       />
 
-      <header className="game-header flex items-center gap-2 flex-wrap">
+      <header className="game-header">
         <span className="title-small">Kaaboo</span>
         <span className="room-code-small">#{gameState.roomId}</span>
         {gameState.roundNumber > 0 && <span className="round-badge">Round {gameState.roundNumber}</span>}
@@ -409,12 +412,16 @@ export function GamePage() {
           <span className="header-turn-badge your-turn-badge">Your turn</span>
         )}
         {currentUser && <span className="header-username">{currentUser.username}</span>}
-        <Badge count={chatUnread} size="small">
-          <Button icon={<MessageOutlined />} size="small" onClick={() => { setChatOpen(!chatOpen); setChatUnread(0); }} />
-        </Badge>
-        <Button icon={<QuestionCircleOutlined />} size="small" onClick={() => setRulesOpen(true)} title="Rules & Powers" />
-        <Button size="small" onClick={handleLeave}>Leave</Button>
-        <Button size="small" onClick={logout}>Log Out</Button>
+        <button
+          className="btn-ghost btn-chat"
+          onClick={() => { setChatOpen(!chatOpen); setChatUnread(0); }}
+          title="Chat"
+        >
+          💬{chatUnread > 0 && <span className="chat-unread-badge">{chatUnread}</span>}
+        </button>
+        <button className="btn-ghost btn-rules-help" onClick={() => setRulesOpen(true)} title="Rules & Powers">?</button>
+        <button className="btn-ghost btn-leave" onClick={handleLeave}>Leave</button>
+        <button className="btn-ghost" style={{ marginLeft: '6px' }} onClick={logout}>Log Out</button>
       </header>
 
       {kaabooCallerId && !isFinished && (
@@ -428,16 +435,16 @@ export function GamePage() {
         <div className="peek-banner">
           <span className="peek-icon">👁</span>
           <span>Memorise your <strong>bottom two cards</strong> — hiding in{' '}
-            <span className={clsx('peek-countdown', peekSecs <= 3 && 'peek-countdown-urgent')}>{peekSecs}s</span>
+            <span className={`peek-countdown${peekSecs <= 3 ? ' peek-countdown-urgent' : ''}`}>{peekSecs}s</span>
           </span>
         </div>
       )}
 
       {playdownWindow && !playdownWindow.claimed && (
-        <div className={clsx('playdown-banner', isEligiblePlaydown && 'playdown-eligible')}>
+        <div className={`playdown-banner${isEligiblePlaydown ? ' playdown-eligible' : ''}`}>
           <div className="pd-timer-col">
             <span className="pd-timer-label">Time left</span>
-            <span className={clsx('pd-countdown', playdownSecs <= 1 && 'pd-countdown-urgent')}>{playdownSecs}</span>
+            <span className={`pd-countdown${playdownSecs <= 1 ? ' pd-countdown-urgent' : ''}`}>{playdownSecs}</span>
           </div>
           <div className="pd-body">
             <span className="pd-main-text">⚡ Play a <strong>{playdownWindow.topCardRank}</strong> to play down!</span>
@@ -449,11 +456,11 @@ export function GamePage() {
       )}
 
       {giveCardWindow && (
-        <div className={clsx('givecard-banner', isGiveCardGiver && 'givecard-giver')}>
+        <div className={`givecard-banner${isGiveCardGiver ? ' givecard-giver' : ''}`}>
           {isGiveCardGiver ? (<>
             <span className="gc-icon">🤲</span>
             <span>Give a card to <strong>{playerName(giveCardWindow.receiverId)}</strong>{' — '}
-              <span className={clsx('gc-countdown', giveCardSecs <= 2 && 'gc-countdown-urgent')}>{giveCardSecs}s</span>
+              <span className={`gc-countdown${giveCardSecs <= 2 ? ' gc-countdown-urgent' : ''}`}>{giveCardSecs}s</span>
             </span>
             <span className="gc-hint">Random card given if time runs out</span>
           </>) : isGiveCardReceiver ? (<>
@@ -513,13 +520,15 @@ export function GamePage() {
       <div className="table-centre">
         <div className="pile-container">
           <div className="pile-label">Deck ({deckSize})</div>
-          <div className={clsx('deck-pile', needsToDraw && 'deck-clickable')} onClick={needsToDraw ? drawCard : undefined}>
+          <div className={`deck-pile${needsToDraw ? ' deck-clickable' : ''}`} onClick={needsToDraw ? drawCard : undefined}>
             {deckSize > 0 ? <Card faceDown /> : <div className="empty-pile">Empty</div>}
           </div>
           {needsToDraw && (
             <div className="draw-actions">
               <div className="pile-hint" onClick={drawCard} style={{ cursor: 'pointer' }}>Click to draw</div>
-              {!kaabooAlreadyCalled && <Button type="primary" danger onClick={callKaaboo}>★ Kaaboo!</Button>}
+              {!kaabooAlreadyCalled && (
+                <button className="btn-kaaboo" onClick={callKaaboo}>★ Kaaboo!</button>
+              )}
             </div>
           )}
         </div>
@@ -528,7 +537,7 @@ export function GamePage() {
           <div className="drawn-card-area">
             <div className="pile-label">Your draw</div>
             <Card card={drawnCard} />
-            <Button onClick={discardDrawn}>Discard it</Button>
+            <button className="btn-secondary btn-discard" onClick={discardDrawn}>Discard it</button>
           </div>
         )}
 
@@ -554,7 +563,7 @@ export function GamePage() {
         </div>
 
         {powerWindow && isMyPower && (
-          <div className={clsx('power-panel', powerPhase === 'decision' ? 'power-panel-decision' : 'power-panel-action')}>
+          <div className={`power-panel${powerPhase === 'decision' ? ' power-panel-decision' : ' power-panel-action'}`}>
             <div className="power-rank-badge">{POWER_RANK_SYMBOL[powerWindow.cardRank]}</div>
             <div className="power-panel-body">
               {powerPhase === 'decision' && (
@@ -575,25 +584,25 @@ export function GamePage() {
               )}
             </div>
             <div className="power-panel-right">
-              <span className={clsx('power-panel-secs', (powerPhase === 'decision' ? powerSecs <= 2 : powerSecs <= 5) && 'power-countdown-urgent')}>{powerSecs}s</span>
+              <span className={`power-panel-secs${(powerPhase === 'decision' ? powerSecs <= 2 : powerSecs <= 5) ? ' power-countdown-urgent' : ''}`}>{powerSecs}s</span>
               {powerPhase === 'decision' && (
-                <div className="power-decision-btns flex gap-2">
-                  <Button type="primary" onClick={usePower}>Use It</Button>
-                  <Button onClick={skipPower}>Skip</Button>
+                <div className="power-decision-btns">
+                  <button className="btn-primary power-yes" onClick={usePower}>Use It</button>
+                  <button className="btn-ghost power-no" onClick={skipPower}>Skip</button>
                 </div>
               )}
               {powerPhase === 'action' && powerType === 'double' && !powerWindow.swapSelection && !activePowerMode && (
-                <div className="power-subpower-btns flex gap-2">
-                  {powerWindow.remainingPowers?.includes('peek') && <Button onClick={() => setActivePowerMode('peek')}>👁 Peek</Button>}
-                  {powerWindow.remainingPowers?.includes('swap') && <Button onClick={() => setActivePowerMode('swap')}>🔀 Swap</Button>}
-                  <Button onClick={skipRemaining}>Skip</Button>
+                <div className="power-subpower-btns">
+                  {powerWindow.remainingPowers?.includes('peek') && <button className="btn-secondary power-sub-btn" onClick={() => setActivePowerMode('peek')}>👁 Peek</button>}
+                  {powerWindow.remainingPowers?.includes('swap') && <button className="btn-secondary power-sub-btn" onClick={() => setActivePowerMode('swap')}>🔀 Swap</button>}
+                  <button className="btn-ghost power-sub-btn" onClick={skipRemaining}>Skip</button>
                 </div>
               )}
               {powerPhase === 'action' && powerType === 'double' && activePowerMode && !powerWindow.swapSelection && (
-                <Button onClick={() => setActivePowerMode(null)}>← Back</Button>
+                <button className="btn-ghost power-sub-btn" onClick={() => setActivePowerMode(null)}>← Back</button>
               )}
               {powerPhase === 'action' && powerType !== 'double' && (
-                <Button onClick={skipRemaining}>Skip</Button>
+                <button className="btn-ghost power-sub-btn" onClick={skipRemaining}>Skip</button>
               )}
             </div>
           </div>
@@ -626,7 +635,7 @@ export function GamePage() {
             <div className="peek-reveal-header">
               <span className="peek-reveal-eye">👁</span>
               <span className="peek-reveal-title">Peeked at {peekReveal.ownerName}</span>
-              <span className={clsx('peek-reveal-secs', peekRevealSecs <= 2 && 'urgent')}>{peekRevealSecs}s</span>
+              <span className={`peek-reveal-secs${peekRevealSecs <= 2 ? ' urgent' : ''}`}>{peekRevealSecs}s</span>
             </div>
             <div className="peek-reveal-card-display">
               <Card card={peekReveal.card} />
@@ -644,54 +653,64 @@ export function GamePage() {
       )}
 
       {isFinished && finalResult && (
-        <Modal
-          open
-          footer={null}
-          closable={false}
-          centered
-          width={520}
-          title={<div className="gameover-title">★ KAABOO ★</div>}
-        >
-          <div className={`gameover-result ${finalResult.kaabooCallerWon ? 'result-win' : 'result-lose'}`}>
-            <span className="result-icon">{finalResult.kaabooCallerWon ? '🏆' : '💔'}</span>
-            <div>
-              <div className="result-name">{playerName(finalResult.kaabooCallerId)}</div>
-              <div className="result-outcome">
-                {finalResult.kaabooCallerWon ? 'called Kaaboo and WON! (+1 scoreboard)' : 'called Kaaboo but LOST. (-1 scoreboard)'}
+        <div className="gameover-overlay">
+          <div className="gameover-card">
+            <div className="gameover-title">★ KAABOO ★</div>
+
+            <div className={`gameover-result ${finalResult.kaabooCallerWon ? 'result-win' : 'result-lose'}`}>
+              <span className="result-icon">{finalResult.kaabooCallerWon ? '🏆' : '💔'}</span>
+              <div>
+                <div className="result-name">{playerName(finalResult.kaabooCallerId)}</div>
+                <div className="result-outcome">
+                  {finalResult.kaabooCallerWon
+                    ? 'called Kaaboo and WON! (+1 scoreboard)'
+                    : 'called Kaaboo but LOST. (-1 scoreboard)'}
+                </div>
               </div>
             </div>
-          </div>
 
-          <table className="score-table">
-            <thead>
-              <tr><th>Player</th><th>Card Score</th><th>Scoreboard</th></tr>
-            </thead>
-            <tbody>
-              {finalResult.scores.map((s, i) => (
-                <tr key={s.id} className={clsx(s.id === finalResult.kaabooCallerId && 'row-caller', i === 0 && 'row-lowest')}>
-                  <td>
-                    {i === 0 && <span className="rank-star">★ </span>}
-                    {s.name}
-                    {s.id === finalResult.kaabooCallerId && <span className="caller-tag"> (Kaaboo)</span>}
-                  </td>
-                  <td className="score-num">{s.cardScore}</td>
-                  <td className={`score-board-num ${s.scoreBoard > 0 ? 'pos' : s.scoreBoard < 0 ? 'neg' : ''}`}>
-                    {s.scoreBoard > 0 ? `+${s.scoreBoard}` : s.scoreBoard}
-                  </td>
+            <table className="score-table">
+              <thead>
+                <tr>
+                  <th>Player</th>
+                  <th>Card Score</th>
+                  <th>Scoreboard</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {finalResult.scores.map((s, i) => (
+                  <tr key={s.id} className={[
+                    s.id === finalResult.kaabooCallerId && 'row-caller',
+                    i === 0 && 'row-lowest',
+                  ].filter(Boolean).join(' ')}>
+                    <td>
+                      {i === 0 && <span className="rank-star">★ </span>}
+                      {s.name}
+                      {s.id === finalResult.kaabooCallerId && (
+                        <span className="caller-tag"> (Kaaboo)</span>
+                      )}
+                    </td>
+                    <td className="score-num">{s.cardScore}</td>
+                    <td className={`score-board-num ${s.scoreBoard > 0 ? 'pos' : s.scoreBoard < 0 ? 'neg' : ''}`}>
+                      {s.scoreBoard > 0 ? `+${s.scoreBoard}` : s.scoreBoard}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
 
-          <StatsPanel inline />
+            <StatsPanel inline />
 
-          <div className="gameover-actions flex gap-2 justify-end mt-3">
-            {me?.isHost
-              ? <Button type="primary" onClick={restartGame}>Play Again</Button>
-              : <span className="waiting-text">Waiting for host to restart…</span>}
-            <Button onClick={handleLeave}>Leave</Button>
+            <div className="gameover-actions">
+              {me?.isHost ? (
+                <button className="btn-primary" onClick={restartGame}>Play Again</button>
+              ) : (
+                <span className="waiting-text">Waiting for host to restart…</span>
+              )}
+              <button className="btn-ghost" onClick={handleLeave}>Leave</button>
+            </div>
           </div>
-        </Modal>
+        </div>
       )}
     </div>
   );

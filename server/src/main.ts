@@ -41,7 +41,7 @@ async function bootstrap() {
   app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
   app.useWebSocketAdapter(new SocketIoAdapter(app));
   app.enableShutdownHooks();
-  const port = process.env.PORT || 3001;
+  const port = process.env.PORT || 8888;
   await app.listen(port);
   console.log(`Server on http://localhost:${port}`);
 }

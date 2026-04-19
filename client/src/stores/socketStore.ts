@@ -5,7 +5,7 @@ import { TOKEN_KEY } from '@/api/client';
 
 export type AppSocket = Socket<ServerToClientEvents, ClientToServerEvents>;
 
-const SERVER_URL = (import.meta.env.VITE_SERVER_URL as string | undefined) ?? 'http://localhost:3001';
+const SERVER_URL = (import.meta.env.VITE_SERVER_URL as string | undefined) ?? `http://localhost:${process.env.PORT}`;
 
 function createSocket(): AppSocket {
   return io(SERVER_URL, {

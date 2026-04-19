@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from 'react';
-import { Badge } from 'antd';
 
 export interface GameLogEntry {
   id: string | number;
@@ -47,7 +46,7 @@ export function GameLog({ logs }: GameLogProps) {
         <span className="game-log-chevron">{open ? '▾' : '▸'}</span>
         <span className="game-log-title">Log</span>
         {!open && unread > 0 && (
-          <Badge count={unread} overflowCount={99} size="small" style={{ marginLeft: 6 }} />
+          <span className="game-log-badge">{unread > 99 ? '99+' : unread}</span>
         )}
         {open && <span className="game-log-count">{logs.length}</span>}
       </button>

@@ -18,7 +18,8 @@ export default {
     },
   },
   corePlugins: {
-    preflight: false, // AntD ships its own reset; avoid fighting it
+    preflight: false,
   },
+  important: true,
   plugins: [],
 };
