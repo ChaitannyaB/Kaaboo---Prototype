@@ -22,6 +22,7 @@ import { GiveCardDto } from './dto/give-card.dto';
   transports: ['websocket', 'polling'],
 })
 @UsePipes(new ValidationPipe({ transform: true, whitelist: true }))
+@UseGuards(WsAuthGuard)
 export class GameGateway implements OnGatewayInit, OnGatewayConnection, OnGatewayDisconnect {
   @WebSocketServer()
   server: Server;
@@ -81,8 +82,6 @@ export class GameGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
     @ConnectedSocket() socket: Socket,
     @MessageBody() data: { isPublic?: boolean } = {},
   ) {
-    if (!socket.data.userId) return { error: 'Login required' };
-
     const scoreBoard = await this.gameService.loadScoreBoard(socket.data.userId);
     const isPublic = data?.isPublic !== false;
     let roomId: string;
@@ -102,7 +101,6 @@ export class GameGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
     @ConnectedSocket() socket: Socket,
     @MessageBody() data: { roomId: string },
   ) {
-    if (!socket.data.userId) return { error: 'Login required' };
     const id = data?.roomId?.toUpperCase();
     const room = this.gameService.rooms.get(id);
     if (!room) return { error: 'Room not found' };
@@ -205,7 +203,6 @@ export class GameGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
   }
 
   @SubscribeMessage('replace-grid-card')
-  @UseGuards(WsAuthGuard)
   handleReplaceGridCard(
     @ConnectedSocket() socket: Socket,
     @MessageBody() data: ReplaceGridCardDto,
@@ -221,7 +218,6 @@ export class GameGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
   }
 
   @SubscribeMessage('play-down')
-  @UseGuards(WsAuthGuard)
   handlePlayDown(
     @ConnectedSocket() socket: Socket,
     @MessageBody() data: PlayDownDto,
@@ -258,7 +254,6 @@ export class GameGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
   }
 
   @SubscribeMessage('give-card')
-  @UseGuards(WsAuthGuard)
   handleGiveCard(
     @ConnectedSocket() socket: Socket,
     @MessageBody() data: GiveCardDto,
@@ -348,7 +343,6 @@ export class GameGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
   ) {
     const room = this.gameService.rooms.get(socket.data.roomId);
     if (!room) return { error: 'Not in a room' };
-    if (!socket.data.username) return { error: 'Login required' };
     const trimmed = ((data?.text) ?? '').trim().slice(0, 200);
     if (!trimmed) return { error: 'Empty message' };
     this.server.to(socket.data.roomId).emit('chat-message', {

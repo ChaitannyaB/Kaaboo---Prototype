@@ -1,3 +1,7 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
 /* ── Reset & base ─────────────────────────────────────────────────────────── */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -20,7 +24,7 @@
 html, body, #root { height: 100%; }
 
 body {
-  background: var(--bg);
+  background: var(--bg) url('/globalBg.png') center center / cover no-repeat fixed;
   color: var(--text);
   font-family: 'Inter', sans-serif;
   font-size: 14px;
@@ -820,7 +824,6 @@ button:disabled { opacity: .4; cursor: not-allowed; transform: none; }
   flex-direction: column;
   height: 100vh;
   overflow: clip; /* clip instead of hidden — hidden breaks position:fixed on iOS Safari */
-  background: var(--bg);
 }
 
 /* Header */
@@ -1251,17 +1254,13 @@ button:disabled { opacity: .4; cursor: not-allowed; transform: none; }
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--bg);
-  padding: 24px;
 }
 
 .auth-card {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 16px;
-  padding: 36px 32px;
   width: 100%;
-  max-width: 400px;
   display: flex;
   flex-direction: column;
   align-items: center;

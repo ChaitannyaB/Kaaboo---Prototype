@@ -146,7 +146,7 @@ export class GameService implements OnApplicationShutdown {
       r.closePlaydownWindow();
       this.afterPlaydownClose(roomId);
       console.log(`[pd] ${roomId} window expired`);
-    }, 8_000));
+    }, 3_000));
   }
 
   openGiveCard(roomId: string, giverId: string, receiverId: string) {
