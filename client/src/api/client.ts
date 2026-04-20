@@ -3,7 +3,7 @@ import axios, { AxiosError, type AxiosInstance } from 'axios';
 export const TOKEN_KEY = 'kaaboo_token';
 export const USER_KEY = 'kaaboo_user';
 
-const baseURL = (import.meta.env.VITE_SERVER_URL as string | undefined) ?? '';
+const baseURL = (import.meta.env.VITE_SERVER_URL as string | undefined) ?? 'http://localhost:8888';
 
 export const apiClient: AxiosInstance = axios.create({
   baseURL,
