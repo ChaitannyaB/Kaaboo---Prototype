@@ -22,6 +22,7 @@ export function LobbyPage({ mode }: LobbyProps) {
   const logout = useAuthStore((s) => s.logout);
   const gameState = useGameStore((s) => s.gameState);
   const mySocketId = useSocketStore((s) => s.myId);
+  const connected = useSocketStore((s) => s.connected);
 
   const [formMode, setFormMode] = useState<FormMode>('home');
   const [joinCode, setJoinCode] = useState('');
@@ -104,6 +105,12 @@ export function LobbyPage({ mode }: LobbyProps) {
   if (mode === 'waiting' && gameState) {
     return (
       <div className="lobby-layout">
+        {!connected && (
+          <div className="reconnect-banner" role="status" aria-live="polite">
+            <span className="reconnect-dot" />
+            <span>Reconnecting…</span>
+          </div>
+        )}
         {errorMsg && <div className="error-banner">{errorMsg}</div>}
         <PlayerToasts players={gameState.players} />
         <ChatPanel
@@ -189,6 +196,12 @@ export function LobbyPage({ mode }: LobbyProps) {
   // ── Home ─────────────────────────────────────────────────────────────────────
   return (
     <div className="lobby-layout">
+      {!connected && (
+        <div className="reconnect-banner" role="status" aria-live="polite">
+          <span className="reconnect-dot" />
+          <span>Reconnecting…</span>
+        </div>
+      )}
       {errorMsg && <div className="error-banner">{errorMsg}</div>}
       {showRules && <RulesModal onClose={() => setShowRules(false)} />}
       <div className="lobby-home">

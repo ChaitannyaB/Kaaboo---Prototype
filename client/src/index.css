@@ -2498,4 +2498,196 @@ button:disabled { opacity: .4; cursor: not-allowed; transform: none; }
   .score-table th { padding: 5px 8px; }
   .score-table td { padding: 6px 8px; }
   .gameover-actions { justify-content: center; flex-wrap: wrap; }
+
+  /* Chat drawer → full-width sheet on phones */
+  .chat-drawer {
+    width: 100vw;
+    max-width: 100vw;
+    padding-top: env(safe-area-inset-top, 0);
+    padding-bottom: env(safe-area-inset-bottom, 0);
+  }
 }
+
+/* ── Tiny phones (≤ 360px) ────────────────────────────────────────────────── */
+@media (max-width: 360px) {
+  .card-grid {
+    --card-w: 52px;
+    --card-h: 76px;
+    --card-gap: 6px;
+  }
+  .opponents-row .card-grid,
+  .opponent-container .card-grid {
+    --card-w: 38px;
+    --card-h: 54px;
+    --card-gap: 4px;
+  }
+  .game-header { padding: 6px 8px; gap: 5px; flex-wrap: wrap; }
+  .title-small { font-size: 13px; }
+  .room-code-small { font-size: 10px; }
+  .btn-leave, .btn-rules-help, .btn-chat { padding: 0 8px; font-size: 11px; }
+
+  .playdown-banner { flex-wrap: wrap; gap: 8px; padding: 7px 10px; }
+  .pd-countdown { font-size: 30px; min-width: 40px; }
+  .pd-main-text { font-size: 13px; }
+  .pd-main-text strong { font-size: 15px; }
+
+  .power-panel { flex-direction: column; align-items: stretch; }
+  .power-panel-right { justify-content: center; }
+
+  .table-centre { gap: 8px; padding: 6px 8px; }
+  .my-area { padding: 8px 8px 10px; gap: 8px; }
+
+  .gameover-title { font-size: 18px; letter-spacing: 2px; }
+  .score-table { font-size: 11px; }
+}
+
+/* ── Tablet portrait (481–767px) ──────────────────────────────────────────── */
+@media (min-width: 481px) and (max-width: 767px) {
+  .card-grid {
+    --card-w: 66px;
+    --card-h: 96px;
+    --card-gap: 10px;
+  }
+  .gameboard { height: 100dvh; }
+  .game-header { flex-wrap: wrap; }
+  .btn-leave, .btn-rules-help, .btn-chat { min-height: 44px; }
+  .chat-drawer { width: 360px; }
+}
+
+/* ── Universal responsive fixes ───────────────────────────────────────────── */
+/* Score table wrapper can scroll horizontally on narrow screens */
+.score-table-wrap { width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+.score-table { min-width: 320px; }
+
+/* Fluid hero/title fonts — never overflow */
+.gameover-title { font-size: clamp(18px, 5vw, 28px); }
+
+/* Reconnecting banner (reuses error-banner pattern) */
+.reconnect-banner {
+  position: fixed;
+  top: env(safe-area-inset-top, 0);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 400;
+  background: #3a2d0a;
+  color: #f4d35e;
+  border: 1px solid #8a6d15;
+  border-radius: 0 0 10px 10px;
+  padding: 8px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  box-shadow: 0 4px 14px rgba(0,0,0,.4);
+  max-width: min(92vw, 420px);
+  text-align: center;
+}
+.reconnect-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #f4d35e;
+  animation: pulse 1.2s ease-in-out infinite;
+  flex-shrink: 0;
+}
+
+/* Make all interactive overlays safe-area aware on notched phones */
+.game-log,
+.chat-drawer,
+.player-toasts {
+  padding-bottom: calc(var(--toast-pad-bottom, 0px) + env(safe-area-inset-bottom, 0));
+}
+
+/* ── Fluid lobby/auth typography (all screens) ────────────────────────────── */
+.title { font-size: clamp(28px, 8vw, 48px); letter-spacing: clamp(2px, 1vw, 6px); }
+.room-code { font-size: clamp(22px, 7vw, 36px); letter-spacing: clamp(3px, 1.5vw, 8px); }
+
+/* ── Lobby responsive (≤ 480px) ───────────────────────────────────────────── */
+@media (max-width: 480px) {
+  .lobby-home, .lobby-waiting { padding: 16px 12px; gap: 16px; min-height: 100dvh; }
+  .lobby-main-area { gap: 16px; }
+  .subtitle { font-size: 13px; text-align: center; }
+
+  .home-buttons { flex-direction: column; width: 100%; max-width: 320px; }
+  .home-buttons > button { width: 100%; min-height: 44px; }
+
+  .form-box { padding: 18px 14px; max-width: 100%; border-radius: 12px; }
+  .form-actions { flex-wrap: wrap; justify-content: center; }
+  .form-actions > button { flex: 1 1 120px; min-height: 44px; }
+
+  .room-code-box { padding: 14px 18px; width: 100%; max-width: 320px; }
+  .room-visibility-btn, .room-visibility-badge { font-size: 11px; }
+
+  .player-list { max-width: 100%; max-height: 38dvh; overflow-y: auto; padding: 12px; }
+  .player-list h3 { font-size: 12px; }
+  .player-row { font-size: 13px; }
+
+  .public-rooms-header { flex-direction: column; align-items: stretch; gap: 8px; }
+  .public-rooms-search { width: 100%; }
+  .public-room-row {
+    flex-wrap: wrap;
+    gap: 6px 10px;
+    padding: 10px 12px;
+  }
+  .public-room-id { flex: 1 1 80px; }
+  .public-room-host { flex: 2 1 100%; order: 3; font-size: 11px; }
+  .public-room-players { font-size: 12px; }
+  .public-room-join { min-height: 38px; padding: 0 14px; font-size: 12px; }
+
+  .join-panel { width: 100%; }
+  .public-rooms-box { width: 100%; }
+
+  .danger-zone { width: 100%; }
+  .delete-confirm-box { padding: 14px; }
+
+  .waiting-footer-actions { flex-wrap: wrap; }
+  .waiting-footer-actions > button { flex: 1 1 120px; min-height: 40px; }
+
+  /* Friends panel should fall behind/below on mobile — existing 700px rule handles column */
+  .friends-panel { max-height: 50dvh; overflow-y: auto; }
+
+  /* Chat header + composer — touch sizing */
+  .chat-input { min-height: 40px; }
+  .chat-send, .chat-close { min-height: 40px; min-width: 40px; }
+
+  /* Rules modal — fullscreen sheet */
+  .rules-modal, .modal-content {
+    width: 95vw;
+    max-width: 560px;
+    max-height: 88dvh;
+    overflow-y: auto;
+  }
+
+  /* Stats panel — prevent table overflow */
+  .stats-table-wrap, .stats-grid { overflow-x: auto; }
+
+  /* Toasts bottom-center and safe-area aware */
+  .player-toasts {
+    left: 50%;
+    right: auto;
+    transform: translateX(-50%);
+    bottom: calc(12px + env(safe-area-inset-bottom, 0));
+    width: min(92vw, 360px);
+    align-items: center;
+  }
+
+  /* Game log collapsed pill on phone */
+  .game-log {
+    max-width: min(60vw, 240px);
+    max-height: 28dvh;
+    font-size: 11px;
+  }
+
+  /* Card grid — opponent small variant even tighter */
+  .card-grid-small { --card-w: 40px; --card-h: 56px; --card-gap: 4px; }
+}
+
+/* ── Lobby tablet (481–900px) ─────────────────────────────────────────────── */
+@media (min-width: 481px) and (max-width: 900px) {
+  .lobby-home, .lobby-waiting { padding: 24px 20px; }
+  .home-buttons { flex-wrap: wrap; justify-content: center; }
+  .home-buttons > button { min-width: 160px; min-height: 44px; }
+  .public-room-row { flex-wrap: wrap; }
+}
+
