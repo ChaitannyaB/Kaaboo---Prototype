@@ -37,6 +37,7 @@ export function GamePage() {
   const navigate = useNavigate();
   const gameState = useGameStore((s) => s.gameState);
   const myId = useSocketStore((s) => s.myId);
+  const connected = useSocketStore((s) => s.connected);
   const currentUser = useAuthStore((s) => s.user);
   const logout = useAuthStore((s) => s.logout);
   const rulesOpen = useUiStore((s) => s.rulesOpen);
@@ -394,6 +395,12 @@ export function GamePage() {
 
   return (
     <div className="gameboard">
+      {!connected && (
+        <div className="reconnect-banner" role="status" aria-live="polite">
+          <span className="reconnect-dot" />
+          <span>Reconnecting…</span>
+        </div>
+      )}
       {errorMsg && <div className="error-banner">{errorMsg}</div>}
       {rulesOpen && <RulesModal onClose={() => setRulesOpen(false)} />}
       <PlayerToasts players={players} />
@@ -669,6 +676,7 @@ export function GamePage() {
               </div>
             </div>
 
+            <div className="score-table-wrap">
             <table className="score-table">
               <thead>
                 <tr>
@@ -698,6 +706,7 @@ export function GamePage() {
                 ))}
               </tbody>
             </table>
+            </div>
 
             <StatsPanel inline />
 
