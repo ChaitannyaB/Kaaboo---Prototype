@@ -267,6 +267,7 @@ export class GameGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
     if (!room) return { error: 'Not in a room' };
     const result = room.giveCard(socket.id, data.gridPosition);
     if (result.error) return result;
+    this.gameService.clearGiveCardTimer(socket.data.roomId);
     this.gameService.afterPlaydownClose(socket.data.roomId);
     return { ok: true };
   }

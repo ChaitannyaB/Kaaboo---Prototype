@@ -55,6 +55,7 @@ model GameInvite {
 
   @@index([createdAt])
   @@index([inviteeId, status])
+  @@index([inviteeId, roomId])
 }
 
 enum InviteStatus {
