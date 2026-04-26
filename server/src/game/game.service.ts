@@ -226,6 +226,11 @@ export class GameService implements OnApplicationShutdown {
     this.pdTimers.delete(roomId);
   }
 
+  clearGiveCardTimer(roomId: string) {
+    clearTimeout(this.gcTimers.get(roomId));
+    this.gcTimers.delete(roomId);
+  }
+
   clearPowerDecisionTimer(roomId: string) {
     clearTimeout(this.pdecTimers.get(roomId));
     this.pdecTimers.delete(roomId);
