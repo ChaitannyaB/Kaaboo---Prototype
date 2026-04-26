@@ -56,7 +56,7 @@ export interface PowerWindow {
   powerType: PowerType;
   powerLabel: string;
   remainingPowers: ('peek' | 'swap')[] | null;
-  swapSelection: { playerId: string; gridPosition: GridPosition } | null;
+  swapSelection: { playerId: string; gridPosition: string }[];
   peekedCards: { ownerId: string; position: GridPosition }[];
 }
 
@@ -93,6 +93,8 @@ export interface GameState {
   powerWindow: PowerWindow | null;
   lastSwap: LastSwap | null;
   lastReplace: { playerId: string; position: GridPosition } | null;
+  turnEndsAt: number | null;
+  lastAfkPenalty: { playerId: string; playerName: string } | null;
   finalResult: FinalResult | null;
   players: PlayerPublic[];
   myHand: Card[];

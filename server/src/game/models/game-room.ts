@@ -31,7 +31,7 @@ interface PowerWindow {
   powerType: string;
   powerLabel: string;
   remainingPowers: string[] | null;
-  swapSelection: { playerId: string; gridPosition: string } | null;
+  swapSelection: { playerId: string; gridPosition: string }[];
   peekedCards: { ownerId: string; position: string }[];
 }
 interface LastSwap {
@@ -68,6 +68,8 @@ export class GameRoom {
   roundNumber: number;
   lastSwap: LastSwap | null;
   lastReplace: { playerId: string; position: string } | null;
+  turnEndsAt: number | null;
+  lastAfkPenalty: { playerId: string; playerName: string } | null;
 
   constructor(
     roomId: string,
@@ -96,6 +98,8 @@ export class GameRoom {
     this.roundNumber = 0;
     this.lastSwap = null;
     this.lastReplace = null;
+    this.turnEndsAt = null;
+    this.lastAfkPenalty = null;
 
     this.addPlayer(hostId, hostName, true, hostUserId, hostScoreBoard);
   }
@@ -222,11 +226,31 @@ export class GameRoom {
     return true;
   }
 
+  applyAfkPenalty() {
+    const player = this.players.find((p) => p.id === this.currentTurnPlayerId);
+    if (!player) return;
+    if (player.hand.length > 0) this.deck.push(player.hand.pop());
+    this.deck = shuffle(this.deck);
+    this._reshuffleDiscardIntoDeck();
+    if (this.deck.length > 0) this._addCardToPlayer(player, this.deck.pop());
+    this.lastAfkPenalty = { playerId: player.id, playerName: player.name };
+  }
+
+  private _addCardToPlayer(player: Player, card: Card): void {
+    const emptySlot = player.grid.find(s => POSITIONS.includes(s.position) && s.card === null);
+    if (emptySlot) {
+      emptySlot.card = card;
+    } else {
+      player.grid.push({ position: `extra-${player.grid.filter(s => s.position.startsWith('extra-')).length}`, card });
+    }
+  }
+
   // ── Draw ───────────────────────────────────────────────────────────────────
 
   drawCard(playerId: string) {
     this.lastSwap = null;
     this.lastReplace = null;
+    this.lastAfkPenalty = null;
     this._reshuffleDiscardIntoDeck();
     if (this.deck.length === 0) return { error: 'Deck is empty' };
     const player = this.players.find((p) => p.id === playerId);
@@ -266,9 +290,12 @@ export class GameRoom {
   // ── Play-down window ────────────────────────────────────────────────────────
 
   openPlaydownWindow(discardType: string, currentTurnPlayerId: string) {
-    const eligible = discardType === 'replacement'
-      ? this.players.filter((p) => p.id !== currentTurnPlayerId).map((p) => p.id)
-      : this.players.map((p) => p.id);
+    const basePool = discardType === 'replacement'
+      ? this.players.filter((p) => p.id !== currentTurnPlayerId)
+      : this.players;
+    const eligible = basePool
+      .filter((p) => p.grid.filter((s) => s.card !== null).length > 1)
+      .map((p) => p.id);
     this.playdownWindow = {
       endsAt: Date.now() + 5_000,
       topCard: { ...this.discardPile.at(-1) },
@@ -302,7 +329,7 @@ export class GameRoom {
     const attempter = this.players.find((p) => p.id === attempterId);
     this._reshuffleDiscardIntoDeck();
     if (this.deck.length > 0) {
-      attempter.grid.push({ position: `extra-${attempter.grid.filter(s => s.position.startsWith('extra-')).length}`, card: this.deck.pop() });
+      this._addCardToPlayer(attempter, this.deck.pop());
     }
     return { ok: false, penalty: true };
   }
@@ -323,7 +350,7 @@ export class GameRoom {
     if (!giver || !receiver) return { error: 'Player not found' };
     const slot = giver.grid.find((s) => s.position === gridPosition);
     if (!slot?.card) return { error: 'No card at that position' };
-    receiver.grid.push({ position: `extra-${receiver.grid.filter(s => s.position.startsWith('extra-')).length}`, card: slot.card });
+    this._addCardToPlayer(receiver, slot.card);
     slot.card = null;
     this.closeGiveCardWindow();
     return { ok: true };
@@ -337,7 +364,7 @@ export class GameRoom {
     const valid = giver.grid.filter((s) => s.card);
     if (valid.length > 0) {
       const slot = valid[Math.floor(Math.random() * valid.length)];
-      receiver.grid.push({ position: `extra-${receiver.grid.filter(s => s.position.startsWith('extra-')).length}`, card: slot.card });
+      this._addCardToPlayer(receiver, slot.card);
       slot.card = null;
     }
     this.closeGiveCardWindow();
@@ -356,7 +383,7 @@ export class GameRoom {
       powerType: info.type,
       powerLabel: info.label,
       remainingPowers: info.type === 'double' ? ['peek', 'swap'] : null,
-      swapSelection: null,
+      swapSelection: [],
       peekedCards: [],
     };
     return true;
@@ -409,24 +436,25 @@ export class GameRoom {
     const slot = target.grid.find((s) => s.position === gridPosition);
     if (!slot?.card) return { error: 'No card at that position' };
 
-    if (!pw.swapSelection) {
-      pw.swapSelection = { playerId: targetPlayerId, gridPosition };
+    if (pw.swapSelection.length === 0) {
+      pw.swapSelection = [{ playerId: targetPlayerId, gridPosition }];
       return { ok: true, step: 'first', complete: false };
     }
 
-    if (pw.swapSelection.playerId === targetPlayerId && pw.swapSelection.gridPosition === gridPosition) {
+    const first = pw.swapSelection[0];
+    if (first.playerId === targetPlayerId && first.gridPosition === gridPosition) {
       return { error: 'Cannot swap a card with itself' };
     }
 
-    const firstOwner = this.players.find((p) => p.id === pw.swapSelection.playerId);
-    const firstSlot = firstOwner.grid.find((s) => s.position === pw.swapSelection.gridPosition);
+    const firstOwner = this.players.find((p) => p.id === first.playerId);
+    const firstSlot = firstOwner.grid.find((s) => s.position === first.gridPosition);
     const swapper = this.players.find((p) => p.id === pw.playerId);
 
-    const swapFirst = { playerId: pw.swapSelection.playerId, position: pw.swapSelection.gridPosition };
+    const swapFirst = { playerId: first.playerId, position: first.gridPosition };
     const swapSecond = { playerId: targetPlayerId, position: gridPosition };
 
     [firstSlot.card, slot.card] = [slot.card, firstSlot.card];
-    pw.swapSelection = null;
+    pw.swapSelection = [];
 
     this.lastSwap = { swapperName: swapper?.name ?? '?', first: swapFirst, second: swapSecond };
 
@@ -435,11 +463,56 @@ export class GameRoom {
     return { ok: true, step: 'second', complete };
   }
 
+  powerSwapConfirm(
+    playerId: string,
+    c1OwnerId: string, c1Pos: string,
+    c2OwnerId: string, c2Pos: string,
+  ) {
+    const pw = this.powerWindow;
+    if (!pw || pw.phase !== 'action') return { error: 'No active power action' };
+    if (pw.playerId !== playerId) return { error: 'Not your power' };
+    if (pw.powerType !== 'swap' && pw.powerType !== 'double') return { error: 'No swap power' };
+    if (pw.powerType === 'double' && !pw.remainingPowers.includes('swap')) {
+      return { error: 'Swap power already used' };
+    }
+    if (c1OwnerId === c2OwnerId) {
+      return { error: 'Cannot swap two cards from the same player' };
+    }
+    if (c1OwnerId === c2OwnerId && c1Pos === c2Pos) {
+      return { error: 'Cannot swap a card with itself' };
+    }
+    const owner1 = this.players.find((p) => p.id === c1OwnerId);
+    const owner2 = this.players.find((p) => p.id === c2OwnerId);
+    if (!owner1 || !owner2) return { error: 'Player not found' };
+    const slot1 = owner1.grid.find((s) => s.position === c1Pos);
+    const slot2 = owner2.grid.find((s) => s.position === c2Pos);
+    if (!slot1?.card) return { error: 'No card at first position' };
+    if (!slot2?.card) return { error: 'No card at second position' };
+    [slot1.card, slot2.card] = [slot2.card, slot1.card];
+    const swapper = this.players.find((p) => p.id === playerId);
+    this.lastSwap = {
+      swapperName: swapper?.name ?? '?',
+      first:  { playerId: c1OwnerId, position: c1Pos },
+      second: { playerId: c2OwnerId, position: c2Pos },
+    };
+    if (pw.remainingPowers) pw.remainingPowers = pw.remainingPowers.filter((p) => p !== 'swap');
+    const complete = pw.remainingPowers === null || pw.remainingPowers.length === 0;
+    return { ok: true, complete };
+  }
+
+  powerSwapPreview(playerId: string, selections: { playerId: string; gridPosition: string }[]) {
+    const pw = this.powerWindow;
+    if (!pw || pw.phase !== 'action') return { error: 'No active power action' };
+    if (pw.playerId !== playerId) return { error: 'Not your power' };
+    pw.swapSelection = selections;
+    return { ok: true };
+  }
+
   powerSkipRemaining(playerId: string) {
     const pw = this.powerWindow;
     if (!pw || pw.phase !== 'action') return { error: 'No active power action' };
     if (pw.playerId !== playerId) return { error: 'Not your power' };
-    pw.swapSelection = null;
+    pw.swapSelection = [];
     if (pw.remainingPowers) pw.remainingPowers = [];
     return { ok: true, complete: true };
   }
@@ -505,6 +578,8 @@ export class GameRoom {
         : null,
       lastSwap: this.lastSwap,
       lastReplace: this.lastReplace,
+      turnEndsAt: this.turnEndsAt,
+      lastAfkPenalty: this.lastAfkPenalty,
       finalResult: this.phase === 'finished'
         ? {
             kaabooCallerId: this.kaabooCallerId,

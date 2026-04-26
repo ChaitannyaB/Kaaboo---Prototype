@@ -28,6 +28,7 @@ export class GameService implements OnApplicationShutdown {
   private readonly gcTimers = new Map<string, NodeJS.Timeout>();
   private readonly pdecTimers = new Map<string, NodeJS.Timeout>();
   private readonly pactTimers = new Map<string, NodeJS.Timeout>();
+  private readonly turnTimers = new Map<string, NodeJS.Timeout>();
   private sweepInterval: NodeJS.Timeout | null = null;
 
   constructor(private prisma: PrismaService) {
@@ -110,8 +111,16 @@ export class GameService implements OnApplicationShutdown {
     if (r.kaabooCallerId && r.currentTurnPlayerId === r.kaabooCallerId) {
       r.endGame();
       console.log(`[game] ${roomId} — Kaaboo resolved (${r._kaabooCallerWon ? 'caller won' : 'caller lost'})`);
-      this.flushRoundStats(roomId, r).catch((err) => console.error('[stats] flush error:', err));
+      this.flushRoundStats(roomId, r)
+        .then(() => {
+          if (!this.server) return;
+          for (const p of r.players) {
+            this.server.to(p.id).emit('stats-ready');
+          }
+        })
+        .catch((err) => console.error('[stats] flush error:', err));
     }
+    if (r?.phase === 'playing') this.startTurnTimer(roomId);
     this.broadcastRoom(roomId);
   }
 
@@ -222,6 +231,31 @@ export class GameService implements OnApplicationShutdown {
     this.pdecTimers.delete(roomId);
   }
 
+  startTurnTimer(roomId: string) {
+    clearTimeout(this.turnTimers.get(roomId));
+    const room = this.rooms.get(roomId);
+    if (!room || room.phase !== 'playing') return;
+    room.turnEndsAt = Date.now() + 20_000;
+    this.broadcastRoom(roomId);
+    this.turnTimers.set(roomId, setTimeout(() => {
+      const r = this.rooms.get(roomId);
+      this.turnTimers.delete(roomId);
+      if (!r || r.phase !== 'playing') return;
+      r.turnEndsAt = null;
+      r.applyAfkPenalty();
+      this.broadcastRoom(roomId);
+      this.advanceTurnAndCheck(roomId);
+      console.log(`[turn] ${roomId} AFK timeout — penalty given`);
+    }, 20_000));
+  }
+
+  clearTurnTimer(roomId: string) {
+    clearTimeout(this.turnTimers.get(roomId));
+    this.turnTimers.delete(roomId);
+    const room = this.rooms.get(roomId);
+    if (room) room.turnEndsAt = null;
+  }
+
   async notifyFriendsPresence(userId: string, online: boolean) {
     const friendships = await this.prisma.friendship.findMany({
       where: { status: 'ACCEPTED', OR: [{ requesterId: userId }, { addresseeId: userId }] },
@@ -235,7 +269,7 @@ export class GameService implements OnApplicationShutdown {
   }
 
   cleanupRoom(roomId: string) {
-    for (const map of [this.peekTimers, this.pdTimers, this.gcTimers, this.pdecTimers, this.pactTimers]) {
+    for (const map of [this.peekTimers, this.pdTimers, this.gcTimers, this.pdecTimers, this.pactTimers, this.turnTimers]) {
       const t = map.get(roomId);
       if (t) clearTimeout(t);
       map.delete(roomId);
