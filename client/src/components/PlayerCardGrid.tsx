@@ -23,7 +23,7 @@ interface PlayerCardGridProps {
   selectable?: boolean;
   onSlotClick?: (position: string) => void;
   hint?: string;
-  highlightedSlot?: string | null;
+  highlightedSlots?: string[];
   peekedSlots?: string[];
   swappedSlots?: string[];
   penaltySlots?: string[];
@@ -33,8 +33,9 @@ interface PlayerCardGridProps {
 
 export function PlayerCardGrid({
   grid, small, label, isActive, selectable, onSlotClick, hint,
-  highlightedSlot, peekedSlots = [], swappedSlots = [], penaltySlots = [], replacedSlots = [], playerId,
+  highlightedSlots = [], peekedSlots = [], swappedSlots = [], penaltySlots = [], replacedSlots = [], playerId,
 }: PlayerCardGridProps) {
+  const highlightedSet = new Set(highlightedSlots);
   const peekedSet   = new Set(peekedSlots);
   const swappedSet  = new Set(swappedSlots);
   const penaltySet  = new Set(penaltySlots);
@@ -60,7 +61,7 @@ export function PlayerCardGrid({
               className={clsx(
                 'card-slot-wrap',
                 canClick && 'card-slot-target',
-                slot.position === highlightedSlot && 'card-slot-highlighted',
+                highlightedSet.has(slot.position) && 'card-slot-highlighted',
                 peekedSet.has(slot.position)   && 'card-slot-peeked',
                 swappedSet.has(slot.position)  && 'card-slot-swapped',
                 penaltySet.has(slot.position)  && 'card-slot-penalty',

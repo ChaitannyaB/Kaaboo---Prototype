@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { flushSync } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { Card } from './Card';
@@ -28,7 +29,7 @@ function ScoreBoardPip({ value }: { value: number }) {
   return <span className={`sb-pip sb-pip-${cls}`} title="Scoreboard">SB {label}</span>;
 }
 
-type PowerActionMode = null | 'peek-self' | 'peek-other' | 'peek-any' | 'swap-first' | 'swap-second';
+type PowerActionMode = null | 'peek-self' | 'peek-other' | 'peek-any' | 'swap-first';
 type DoublePowerPick = null | 'peek' | 'swap';
 
 interface Rect { top: number; left: number; width: number; height: number; }
@@ -51,12 +52,15 @@ export function GamePage() {
     return () => window.clearTimeout(t);
   }, [errorMsg]);
 
+  const queryClient  = useQueryClient();
   const peekSecs     = useCountdown(gameState?.peekEndsAt ?? null);
   const playdownSecs = useCountdown(gameState?.playdownWindow?.endsAt ?? null);
   const giveCardSecs = useCountdown(gameState?.giveCardWindow?.endsAt ?? null);
   const powerSecs    = useCountdown(gameState?.powerWindow?.endsAt ?? null);
+  const turnSecs     = useCountdown(gameState?.turnEndsAt ?? null);
 
   const [activePowerMode, setActivePowerMode] = useState<DoublePowerPick>(null);
+  const [pendingSwap, setPendingSwap] = useState<{ ownerId: string; gridPosition: string }[]>([]);
   const [chatUnread, setChatUnread] = useState(0);
 
   const [peekReveal, setPeekReveal] = useState<{ card: CardType; ownerName: string } | null>(null);
@@ -87,11 +91,11 @@ export function GamePage() {
     if (!gameState?.powerWindow || gameState.powerWindow.phase !== 'action') setActivePowerMode(null);
   }, [gameState?.powerWindow?.phase]);
 
-  const prevSwapSel = useRef<GameState['powerWindow'] extends { swapSelection: infer T } ? T : unknown>(null);
   useEffect(() => {
-    if (prevSwapSel.current && !gameState?.powerWindow?.swapSelection) setActivePowerMode(null);
-    prevSwapSel.current = gameState?.powerWindow?.swapSelection ?? null;
-  }, [gameState?.powerWindow?.swapSelection]);
+    if (!gameState?.powerWindow || gameState.powerWindow.phase !== 'action') {
+      setPendingSwap([]);
+    }
+  }, [gameState?.powerWindow?.phase]);
 
   useEffect(() => {
     const prev = prevStateRef.current;
@@ -180,7 +184,7 @@ export function GamePage() {
       }
     }
 
-    if (gameState.playdownWindow && !gameState.playdownWindow.claimed) {
+    if (gameState.phase === 'playing' && prev?.phase === 'playing') {
       for (const curP of gameState.players) {
         const prevP = prev?.players?.find((pp) => pp.id === curP.id);
         const prevPos = new Set(prevP?.grid?.map((s) => s.position) ?? []);
@@ -244,8 +248,9 @@ export function GamePage() {
 
     const socket = getSocket();
     socket.on('game-state', handler);
-    return () => { socket.off('game-state', handler); };
-  }, [myId]);
+    socket.on('stats-ready', () => queryClient.invalidateQueries({ queryKey: ['stats', 'me'] }));
+    return () => { socket.off('game-state', handler); socket.off('stats-ready'); };
+  }, [myId, queryClient]);
 
   useLayoutEffect(() => {
     if (!gameState || !myId) return;
@@ -303,7 +308,6 @@ export function GamePage() {
 
   const powerActionMode: PowerActionMode = (() => {
     if (!isMyPower || powerPhase !== 'action' || !powerWindow) return null;
-    if (powerWindow.swapSelection) return 'swap-second';
     if (powerType === 'peek-self')  return 'peek-self';
     if (powerType === 'peek-other') return 'peek-other';
     if (powerType === 'swap')       return 'swap-first';
@@ -345,8 +349,32 @@ export function GamePage() {
       if (r?.error) return onErr(r.error);
       setActivePowerMode(null);
     });
-  const powerSwapCard = (tId: string, pos: string) =>
-    socket.emit('power-swap-select', { targetPlayerId: tId, gridPosition: pos as GridPosition }, (r) => onErr(r?.error));
+  const selectSwapCard = (ownerId: string, gridPosition: string) => {
+    setPendingSwap((prev) => {
+      let next: { ownerId: string; gridPosition: string }[];
+      if (prev.some((s) => s.ownerId === ownerId && s.gridPosition === gridPosition)) {
+        next = prev.filter((s) => !(s.ownerId === ownerId && s.gridPosition === gridPosition));
+      } else {
+        next = [...prev, { ownerId, gridPosition }];
+        if (next.length > 2) next = next.slice(1);
+      }
+      socket.emit('power-swap-preview', {
+        selections: next.map((s) => ({ playerId: s.ownerId, gridPosition: s.gridPosition })),
+      });
+      return next;
+    });
+  };
+  const swapReady = pendingSwap.length === 2 && pendingSwap[0].ownerId !== pendingSwap[1].ownerId;
+  const confirmSwap = () => {
+    if (!swapReady) return;
+    socket.emit('power-swap-confirm', {
+      card1: { ownerId: pendingSwap[0].ownerId, gridPosition: pendingSwap[0].gridPosition },
+      card2: { ownerId: pendingSwap[1].ownerId, gridPosition: pendingSwap[1].gridPosition },
+    }, (r) => {
+      if (r?.error) onErr(r.error);
+      setPendingSwap([]);
+    });
+  };
 
   const handleLeave = () => {
     socket.emit('leave-room');
@@ -356,40 +384,43 @@ export function GamePage() {
 
   const myGridSelectable = Boolean(
     (hasDrawnCard && isMyTurn) || isEligiblePlaydown || isGiveCardGiver ||
-    (powerActionMode && ['peek-self', 'peek-any', 'swap-first', 'swap-second'].includes(powerActionMode)),
+    (powerActionMode && ['peek-self', 'peek-any', 'swap-first'].includes(powerActionMode)),
   );
   const oppSelectable = Boolean(
     isEligiblePlaydown ||
-    (powerActionMode && ['peek-other', 'peek-any', 'swap-first', 'swap-second'].includes(powerActionMode)),
+    (powerActionMode && ['peek-other', 'peek-any', 'swap-first'].includes(powerActionMode)),
   );
   const myGridClick: ((p: string) => void) | undefined = (() => {
     if (isGiveCardGiver) return giveCard;
     if (isEligiblePlaydown) return (p: string) => playDown(myId, p);
     if (powerActionMode && ['peek-self', 'peek-any'].includes(powerActionMode)) return (p: string) => powerPeekCard(myId, p);
-    if (powerActionMode && ['swap-first', 'swap-second'].includes(powerActionMode)) return (p: string) => powerSwapCard(myId, p);
+    if (powerActionMode === 'swap-first') return (p: string) => selectSwapCard(myId, p);
     if (hasDrawnCard && isMyTurn) return replaceGrid;
     return undefined;
   })();
   const oppClick = (oid: string): ((p: string) => void) | undefined => {
     if (isEligiblePlaydown) return (p: string) => playDown(oid, p);
     if (powerActionMode && ['peek-other', 'peek-any'].includes(powerActionMode)) return (p: string) => powerPeekCard(oid, p);
-    if (powerActionMode && ['swap-first', 'swap-second'].includes(powerActionMode)) return (p: string) => powerSwapCard(oid, p);
+    if (powerActionMode === 'swap-first') return (p: string) => selectSwapCard(oid, p);
     return undefined;
   };
   const myGridHint = (() => {
     if (isGiveCardGiver) return 'Choose a card to give away';
     if (isEligiblePlaydown) return 'Play your own card down';
-    if (powerActionMode === 'peek-self')   return 'Click a card to peek at it';
-    if (powerActionMode === 'peek-any')    return 'Click any of your cards to peek';
-    if (powerActionMode === 'swap-first')  return 'Select the first card to swap';
-    if (powerActionMode === 'swap-second') return 'Now select the second card';
+    if (powerActionMode === 'peek-self')  return 'Click a card to peek at it';
+    if (powerActionMode === 'peek-any')   return 'Click any of your cards to peek';
+    if (powerActionMode === 'swap-first') return pendingSwap.length === 0 ? 'Select first card to swap' : 'Select second card to swap';
     if (hasDrawnCard && isMyTurn) return 'Click a card to replace it';
     return null;
   })();
 
-  const swapSel = powerWindow?.swapSelection;
-  const myHighlighted = swapSel?.playerId === myId ? swapSel.gridPosition : null;
-  const oppHighlighted = (oid: string) => (swapSel?.playerId === oid ? swapSel.gridPosition : null);
+  const swapHighlightSlots = (id: string): string[] => {
+    const fromServer = (powerWindow?.swapSelection ?? []).filter((s) => s.playerId === id).map((s) => s.gridPosition);
+    const fromLocal  = pendingSwap.filter((s) => s.ownerId === id).map((s) => s.gridPosition);
+    return [...new Set([...fromServer, ...fromLocal])];
+  };
+  const myHighlightedSlots  = swapHighlightSlots(myId);
+  const oppHighlightedSlots = (oid: string) => swapHighlightSlots(oid);
 
   const playerName = (id: string | null | undefined) => players.find((p) => p.id === id)?.name ?? '…';
 
@@ -512,13 +543,16 @@ export function GamePage() {
               }
               selectable={oppSelectable}
               onSlotClick={oppClick(p.id)}
-              highlightedSlot={oppHighlighted(p.id)}
+              highlightedSlots={oppHighlightedSlots(p.id)}
               peekedSlots={peekedByPlayer[p.id] ?? []}
               swappedSlots={swappedByPlayer[p.id] ?? []}
               penaltySlots={penaltySlots.filter((s) => s.playerId === p.id).map((s) => s.position)}
               replacedSlots={replacedSlot?.playerId === p.id ? [replacedSlot.position] : []}
             />
             {p.handSize > 0 && <div className="opponent-deciding">deciding…</div>}
+            {p.id === currentTurnPlayerId && phase === 'playing' && !playdownWindow && !giveCardWindow && !powerWindow && turnSecs > 0 && (
+              <span className={`turn-countdown-badge${turnSecs <= 5 ? ' turn-countdown-urgent' : ''}`}>{turnSecs}s</span>
+            )}
             <ScoreBoardPip value={p.sessionScoreBoard ?? 0} />
           </div>
         ))}
@@ -567,6 +601,9 @@ export function GamePage() {
           <ScoreBoardPip value={me?.sessionScoreBoard ?? 0} />
           {isPeek && <span className="peek-hint">Bottom cards visible for {peekSecs}s</span>}
           {!isPeek && myGridHint && <span className="action-hint">{myGridHint}</span>}
+          {isMyTurn && phase === 'playing' && !playdownWindow && !giveCardWindow && !powerWindow && turnSecs > 0 && (
+            <span className={`turn-countdown-badge${turnSecs <= 5 ? ' turn-countdown-urgent' : ''}`}>{turnSecs}s</span>
+          )}
         </div>
 
         {powerWindow && isMyPower && (
@@ -581,12 +618,13 @@ export function GamePage() {
               )}
               {powerPhase === 'action' && (
                 <>
-                  {powerType === 'double' && !powerWindow.swapSelection && !activePowerMode && <span className="power-panel-name">Choose your action</span>}
-                  {powerWindow.swapSelection && <span className="power-panel-name">Select the second card to swap</span>}
-                  {powerActionMode === 'peek-self' && <span className="power-panel-name">Click one of your cards to peek</span>}
-                  {powerActionMode === 'peek-other' && <span className="power-panel-name">Click an opponent's card to peek</span>}
-                  {powerActionMode === 'peek-any' && <span className="power-panel-name">Click any card to peek</span>}
-                  {powerActionMode === 'swap-first' && !powerWindow.swapSelection && <span className="power-panel-name">Select the first card to swap</span>}
+                  {powerType === 'double' && !activePowerMode                                                     && <span className="power-panel-name">Choose your action</span>}
+                  {powerActionMode === 'peek-self'                                                                && <span className="power-panel-name">Click one of your cards to peek</span>}
+                  {powerActionMode === 'peek-other'                                                               && <span className="power-panel-name">Click an opponent's card to peek</span>}
+                  {powerActionMode === 'peek-any'                                                                 && <span className="power-panel-name">Click any card to peek</span>}
+                  {powerActionMode === 'swap-first' && pendingSwap.length === 0                                   && <span className="power-panel-name">Select first card to swap</span>}
+                  {powerActionMode === 'swap-first' && pendingSwap.length === 1                                   && <span className="power-panel-name">Select second card to swap</span>}
+                  {powerActionMode === 'swap-first' && pendingSwap.length === 2 && !swapReady                    && <span className="power-panel-name">Cards must belong to different players</span>}
                 </>
               )}
             </div>
@@ -598,17 +636,33 @@ export function GamePage() {
                   <button className="btn-ghost power-no" onClick={skipPower}>Skip</button>
                 </div>
               )}
-              {powerPhase === 'action' && powerType === 'double' && !powerWindow.swapSelection && !activePowerMode && (
+              {powerPhase === 'action' && powerType === 'double' && !activePowerMode && (
                 <div className="power-subpower-btns">
                   {powerWindow.remainingPowers?.includes('peek') && <button className="btn-secondary power-sub-btn" onClick={() => setActivePowerMode('peek')}>👁 Peek</button>}
                   {powerWindow.remainingPowers?.includes('swap') && <button className="btn-secondary power-sub-btn" onClick={() => setActivePowerMode('swap')}>🔀 Swap</button>}
                   <button className="btn-ghost power-sub-btn" onClick={skipRemaining}>Skip</button>
                 </div>
               )}
-              {powerPhase === 'action' && powerType === 'double' && activePowerMode && !powerWindow.swapSelection && (
+              {powerPhase === 'action' && powerType === 'double' && activePowerMode === 'swap' && (
+                <div className="power-subpower-btns">
+                  <button className="btn-primary power-sub-btn" disabled={!swapReady} onClick={confirmSwap}>{swapReady ? 'Swap' : 'Waiting…'}</button>
+                  <button className="btn-ghost power-sub-btn" onClick={skipRemaining}>Skip</button>
+                  <button className="btn-ghost power-sub-btn" onClick={() => { setActivePowerMode(null); setPendingSwap([]); }}>← Back</button>
+                </div>
+              )}
+              {powerPhase === 'action' && powerType === 'double' && activePowerMode === 'peek' && (
                 <button className="btn-ghost power-sub-btn" onClick={() => setActivePowerMode(null)}>← Back</button>
               )}
-              {powerPhase === 'action' && powerType !== 'double' && (
+              {powerPhase === 'action' && powerType === 'swap' && (
+                <div className="power-subpower-btns">
+                  <button className="btn-primary power-sub-btn" disabled={!swapReady} onClick={confirmSwap}>{swapReady ? 'Swap' : 'Waiting…'}</button>
+                  <button className="btn-ghost power-sub-btn" onClick={skipRemaining}>Skip</button>
+                </div>
+              )}
+              {powerPhase === 'action' && powerType === 'peek-self' && (
+                <button className="btn-ghost power-sub-btn" onClick={skipRemaining}>Skip</button>
+              )}
+              {powerPhase === 'action' && powerType === 'peek-other' && (
                 <button className="btn-ghost power-sub-btn" onClick={skipRemaining}>Skip</button>
               )}
             </div>
@@ -621,7 +675,7 @@ export function GamePage() {
           isActive={isMyTurn && phase === 'playing' && !playdownWindow && !giveCardWindow && !powerWindow}
           selectable={myGridSelectable}
           onSlotClick={myGridClick}
-          highlightedSlot={myHighlighted}
+          highlightedSlots={myHighlightedSlots}
           peekedSlots={peekedByPlayer[myId] ?? []}
           swappedSlots={swappedByPlayer[myId] ?? []}
           penaltySlots={penaltySlots.filter((s) => s.playerId === myId).map((s) => s.position)}

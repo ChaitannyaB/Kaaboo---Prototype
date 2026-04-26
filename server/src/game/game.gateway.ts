@@ -157,7 +157,7 @@ export class GameGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
       this.gameService.broadcastRoom(roomId);
       setTimeout(() => {
         const r2 = this.gameService.rooms.get(roomId);
-        if (r2?.phase === 'peek') { r2.endPeek(); this.gameService.broadcastRoom(roomId); }
+        if (r2?.phase === 'peek') { r2.endPeek(); this.gameService.startTurnTimer(roomId); }
       }, 10_000);
     }, dealMs);
 
@@ -172,6 +172,7 @@ export class GameGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
     if (!room) return { error: 'Not in a room' };
     const result = room.callKaaboo(socket.id);
     if (result.error) return result;
+    this.gameService.clearTurnTimer(socket.data.roomId);
     console.log(`[kaaboo] ${socket.id} called Kaaboo in ${socket.data.roomId}`);
     this.gameService.advanceTurnAndCheck(socket.data.roomId);
     return { ok: true };
@@ -198,6 +199,7 @@ export class GameGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
     if (room.currentTurnPlayerId !== socket.id) return { error: 'Not your turn' };
     const result = room.discardDrawnCard(socket.id);
     if (result.error) return result;
+    this.gameService.clearTurnTimer(socket.data.roomId);
     this.gameService.openPlaydown(socket.data.roomId, result.discardType, socket.id);
     return { ok: true };
   }
@@ -213,6 +215,7 @@ export class GameGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
     if (room.currentTurnPlayerId !== socket.id) return { error: 'Not your turn' };
     const result = room.replaceGridCard(socket.id, data.gridPosition);
     if (result.error) return result;
+    this.gameService.clearTurnTimer(socket.data.roomId);
     this.gameService.openPlaydown(socket.data.roomId, result.discardType, socket.id);
     return { ok: true };
   }
@@ -236,7 +239,9 @@ export class GameGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
     }
 
     if (!result.ok) {
-      this.gameService.broadcastRoom(socket.data.roomId);
+      this.gameService.clearPlaydownTimer(socket.data.roomId);
+      room.closePlaydownWindow();
+      this.gameService.afterPlaydownClose(socket.data.roomId);
       return { ok: false, penalty: true };
     }
 
@@ -322,6 +327,41 @@ export class GameGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
     this.gameService.broadcastRoom(socket.data.roomId);
     if (result.complete) this.gameService.resolvePower(socket.data.roomId);
     return { ok: true, step: result.step, complete: result.complete };
+  }
+
+  @SubscribeMessage('power-swap-preview')
+  handlePowerSwapPreview(
+    @ConnectedSocket() socket: Socket,
+    @MessageBody() data: { selections: { playerId: string; gridPosition: string }[] },
+  ) {
+    const room = this.gameService.rooms.get(socket.data.roomId);
+    if (!room) return { error: 'Not in a room' };
+    const result = room.powerSwapPreview(socket.id, data?.selections ?? []);
+    if (result.error) return result;
+    this.gameService.broadcastRoom(socket.data.roomId);
+    return { ok: true };
+  }
+
+  @SubscribeMessage('power-swap-confirm')
+  @UseGuards(WsAuthGuard)
+  handlePowerSwapConfirm(
+    @ConnectedSocket() socket: Socket,
+    @MessageBody() data: { card1: { ownerId: string; gridPosition: string }; card2: { ownerId: string; gridPosition: string } },
+  ) {
+    const room = this.gameService.rooms.get(socket.data.roomId);
+    if (!room) return { error: 'Not in a room' };
+    const result = room.powerSwapConfirm(
+      socket.id,
+      data.card1.ownerId, data.card1.gridPosition,
+      data.card2.ownerId, data.card2.gridPosition,
+    );
+    if (result.error) return result;
+    if (result.complete) {
+      this.gameService.resolvePower(socket.data.roomId);
+    } else {
+      this.gameService.broadcastRoom(socket.data.roomId);
+    }
+    return { ok: true };
   }
 
   @SubscribeMessage('power-skip')
