@@ -3,6 +3,7 @@ import type { GameState, GridPosition } from './game';
 export interface ServerToClientEvents {
   'me': (payload: { userId: string; username: string }) => void;
   'game-state': (state: GameState) => void;
+  'stats-ready': () => void;
   'chat-message': (msg: { from: string; text: string; ts: number }) => void;
   'friend-request': (data: { id: string; from: { id: string; username: string } }) => void;
   'friend-accepted': () => void;
@@ -44,6 +45,11 @@ export interface ClientToServerEvents {
   'power-swap-select': (
     data: { targetPlayerId: string; gridPosition: GridPosition },
     cb?: SocketCallback<ServerAck & { step?: number; complete?: boolean }>,
+  ) => void;
+  'power-swap-preview': (data: { selections: { playerId: string; gridPosition: GridPosition }[] }) => void;
+  'power-swap-confirm': (
+    data: { card1: { ownerId: string; gridPosition: GridPosition }; card2: { ownerId: string; gridPosition: GridPosition } },
+    cb?: SocketCallback<ServerAck>,
   ) => void;
   'chat-message': (data: { text: string }, cb?: SocketCallback<ServerAck>) => void;
 }
