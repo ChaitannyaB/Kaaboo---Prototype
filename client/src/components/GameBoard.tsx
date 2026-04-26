@@ -359,7 +359,7 @@ export function GamePage() {
         if (next.length > 2) next = next.slice(1);
       }
       socket.emit('power-swap-preview', {
-        selections: next.map((s) => ({ playerId: s.ownerId, gridPosition: s.gridPosition })),
+        selections: next.map((s) => ({ playerId: s.ownerId, gridPosition: s.gridPosition as GridPosition })),
       });
       return next;
     });
@@ -368,8 +368,8 @@ export function GamePage() {
   const confirmSwap = () => {
     if (!swapReady) return;
     socket.emit('power-swap-confirm', {
-      card1: { ownerId: pendingSwap[0].ownerId, gridPosition: pendingSwap[0].gridPosition },
-      card2: { ownerId: pendingSwap[1].ownerId, gridPosition: pendingSwap[1].gridPosition },
+      card1: { ownerId: pendingSwap[0].ownerId, gridPosition: pendingSwap[0].gridPosition as GridPosition },
+      card2: { ownerId: pendingSwap[1].ownerId, gridPosition: pendingSwap[1].gridPosition as GridPosition },
     }, (r) => {
       if (r?.error) onErr(r.error);
       setPendingSwap([]);
