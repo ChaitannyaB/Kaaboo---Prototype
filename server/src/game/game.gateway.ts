@@ -77,6 +77,28 @@ export class GameGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
 
   // ── Room management ─────────────────────────────────────────────────────────
 
+  @SubscribeMessage('leave-room')
+  handleLeaveRoom(@ConnectedSocket() socket: Socket) {
+    const roomId = socket.data.roomId;
+    if (!roomId) return { ok: true };
+    const room = this.gameService.rooms.get(roomId);
+    socket.leave(roomId);
+    socket.data.roomId = undefined;
+    if (!room) return { ok: true };
+
+    room.removePlayer(socket.id);
+    console.log(`[room] ${socket.id} left ${roomId}`);
+
+    if (room.isEmpty()) {
+      this.gameService.cleanupRoom(roomId);
+      console.log(`[room] ${roomId} deleted (empty)`);
+      return { ok: true };
+    }
+
+    this.gameService.broadcastRoom(roomId);
+    return { ok: true };
+  }
+
   @SubscribeMessage('create-room')
   async handleCreateRoom(
     @ConnectedSocket() socket: Socket,
