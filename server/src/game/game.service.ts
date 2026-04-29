@@ -128,8 +128,9 @@ export class GameService implements OnApplicationShutdown {
     const r = this.rooms.get(roomId);
     if (!r) return;
     const ld = r._lastDiscard;
-    if (ld?.wasDrawn && getPowerInfo(ld.rank)) {
-      if (r.openPowerDecisionWindow(r.currentTurnPlayerId, ld.rank)) {
+    if (ld?.wasDrawn && ld.drawerId && getPowerInfo(ld.rank)) {
+      const drawerStillIn = r.players.some((p) => p.id === ld.drawerId);
+      if (drawerStillIn && r.openPowerDecisionWindow(ld.drawerId, ld.rank)) {
         this.broadcastRoom(roomId);
         this.startPowerDecisionTimer(roomId);
         return;

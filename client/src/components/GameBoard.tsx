@@ -97,6 +97,71 @@ export function GamePage() {
     }
   }, [gameState?.powerWindow?.phase]);
 
+  const HIGHLIGHT_FADE_MS = 3000;
+  const [peekedAt, setPeekedAt] = useState<Record<string, number>>({});
+  const [swapSelectedAt, setSwapSelectedAt] = useState<Record<string, number>>({});
+  const [, setHighlightTick] = useState(0);
+
+  const isDoublePower = gameState?.powerWindow?.powerType === 'double';
+
+  useEffect(() => {
+    if (!isDoublePower) {
+      if (Object.keys(peekedAt).length > 0) setPeekedAt({});
+      return;
+    }
+    const peeked = gameState?.powerWindow?.peekedCards ?? [];
+    const liveKeys = new Set(peeked.map((p) => `${p.ownerId}|${p.position}`));
+    setPeekedAt((prev) => {
+      const next: Record<string, number> = {};
+      const now = Date.now();
+      let changed = false;
+      for (const k of liveKeys) {
+        if (prev[k] !== undefined) next[k] = prev[k];
+        else { next[k] = now; changed = true; }
+      }
+      for (const k of Object.keys(prev)) {
+        if (!liveKeys.has(k)) { changed = true; }
+      }
+      return changed || Object.keys(next).length !== Object.keys(prev).length ? next : prev;
+    });
+  }, [isDoublePower, gameState?.powerWindow?.peekedCards]);
+
+  useEffect(() => {
+    if (!isDoublePower) {
+      if (Object.keys(swapSelectedAt).length > 0) setSwapSelectedAt({});
+      return;
+    }
+    const fromServer = gameState?.powerWindow?.swapSelection ?? [];
+    const fromLocal  = pendingSwap;
+    const liveKeys = new Set([
+      ...fromServer.map((s) => `${s.playerId}|${s.gridPosition}`),
+      ...fromLocal.map((s) => `${s.ownerId}|${s.gridPosition}`),
+    ]);
+    setSwapSelectedAt((prev) => {
+      const next: Record<string, number> = {};
+      const now = Date.now();
+      let changed = false;
+      for (const k of liveKeys) {
+        if (prev[k] !== undefined) next[k] = prev[k];
+        else { next[k] = now; changed = true; }
+      }
+      for (const k of Object.keys(prev)) {
+        if (!liveKeys.has(k)) { changed = true; }
+      }
+      return changed || Object.keys(next).length !== Object.keys(prev).length ? next : prev;
+    });
+  }, [isDoublePower, gameState?.powerWindow?.swapSelection, pendingSwap]);
+
+  useEffect(() => {
+    const stamps = [...Object.values(peekedAt), ...Object.values(swapSelectedAt)];
+    if (stamps.length === 0) return;
+    const now = Date.now();
+    const nextExpiry = Math.min(...stamps.map((t) => t + HIGHLIGHT_FADE_MS));
+    const delay = Math.max(0, nextExpiry - now);
+    const id = window.setTimeout(() => setHighlightTick((t) => t + 1), delay + 16);
+    return () => window.clearTimeout(id);
+  }, [peekedAt, swapSelectedAt]);
+
   useEffect(() => {
     const prev = prevStateRef.current;
     prevStateRef.current = gameState;
@@ -272,7 +337,12 @@ export function GamePage() {
 
   const peekedByPlayer: Record<string, string[]> = {};
   if (powerWindow?.peekedCards) {
+    const now = Date.now();
     for (const { ownerId, position } of powerWindow.peekedCards) {
+      if (isDoublePower) {
+        const at = peekedAt[`${ownerId}|${position}`];
+        if (at !== undefined && now - at >= HIGHLIGHT_FADE_MS) continue;
+      }
       (peekedByPlayer[ownerId] ??= []).push(position);
     }
   }
@@ -415,8 +485,18 @@ export function GamePage() {
   })();
 
   const swapHighlightSlots = (id: string): string[] => {
-    const fromServer = (powerWindow?.swapSelection ?? []).filter((s) => s.playerId === id).map((s) => s.gridPosition);
-    const fromLocal  = pendingSwap.filter((s) => s.ownerId === id).map((s) => s.gridPosition);
+    const now = Date.now();
+    const isFresh = (key: string) => {
+      if (!isDoublePower) return true;
+      const at = swapSelectedAt[key];
+      return at === undefined || now - at < HIGHLIGHT_FADE_MS;
+    };
+    const fromServer = (powerWindow?.swapSelection ?? [])
+      .filter((s) => s.playerId === id && isFresh(`${s.playerId}|${s.gridPosition}`))
+      .map((s) => s.gridPosition);
+    const fromLocal  = pendingSwap
+      .filter((s) => s.ownerId === id && isFresh(`${s.ownerId}|${s.gridPosition}`))
+      .map((s) => s.gridPosition);
     return [...new Set([...fromServer, ...fromLocal])];
   };
   const myHighlightedSlots  = swapHighlightSlots(myId);
@@ -428,7 +508,11 @@ export function GamePage() {
     <div className="gameboard">
       {!connected && (
         <div className="reconnect-banner" role="status" aria-live="polite">
-          <span className="reconnect-dot" />
+          <span className="reconnect-icon" aria-hidden="true">
+            <span className="reconnect-arc" />
+            <span className="reconnect-arc" />
+            <span className="reconnect-arc" />
+          </span>
           <span>Reconnecting…</span>
         </div>
       )}

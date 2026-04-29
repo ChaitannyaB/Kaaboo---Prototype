@@ -64,7 +64,7 @@ export class GameRoom {
   playdownWindow: PlaydownWindow | null;
   giveCardWindow: GiveCardWindow | null;
   powerWindow: PowerWindow | null;
-  _lastDiscard: { rank: string; wasDrawn: boolean } | null;
+  _lastDiscard: { rank: string; wasDrawn: boolean; drawerId: string | null } | null;
   roundNumber: number;
   lastSwap: LastSwap | null;
   lastReplace: { playerId: string; position: string } | null;
@@ -268,7 +268,7 @@ export class GameRoom {
     if (player.hand.length === 0) return { error: 'No drawn card to discard' };
     const card = player.hand.pop();
     this.discardPile.push(card);
-    this._lastDiscard = { rank: card.rank, wasDrawn: true };
+    this._lastDiscard = { rank: card.rank, wasDrawn: true, drawerId: playerId };
     return { ok: true, discardType: 'drawn' };
   }
 
@@ -282,7 +282,7 @@ export class GameRoom {
     const oldCard = slot.card;
     slot.card = player.hand.pop();
     this.discardPile.push(oldCard);
-    this._lastDiscard = { rank: oldCard.rank, wasDrawn: false };
+    this._lastDiscard = { rank: oldCard.rank, wasDrawn: false, drawerId: null };
     this.lastReplace = { playerId, position: gridPosition };
     return { ok: true, discardType: 'replacement' };
   }

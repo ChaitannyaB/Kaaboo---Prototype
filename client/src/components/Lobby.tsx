@@ -107,7 +107,11 @@ export function LobbyPage({ mode }: LobbyProps) {
       <div className="lobby-layout">
         {!connected && (
           <div className="reconnect-banner" role="status" aria-live="polite">
-            <span className="reconnect-dot" />
+            <span className="reconnect-icon" aria-hidden="true">
+              <span className="reconnect-arc" />
+              <span className="reconnect-arc" />
+              <span className="reconnect-arc" />
+            </span>
             <span>Reconnecting…</span>
           </div>
         )}
@@ -198,7 +202,11 @@ export function LobbyPage({ mode }: LobbyProps) {
     <div className="lobby-layout">
       {!connected && (
         <div className="reconnect-banner" role="status" aria-live="polite">
-          <span className="reconnect-dot" />
+          <span className="reconnect-icon" aria-hidden="true">
+            <span className="reconnect-arc" />
+            <span className="reconnect-arc" />
+            <span className="reconnect-arc" />
+          </span>
           <span>Reconnecting…</span>
         </div>
       )}
