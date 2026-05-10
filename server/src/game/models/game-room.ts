@@ -113,15 +113,53 @@ export class GameRoom {
     return { ok: true };
   }
 
-  removePlayer(socketId: string) {
+  removePlayer(socketId: string): { resetToLobby: boolean } {
     const idx = this.players.findIndex((p) => p.id === socketId);
-    if (idx === -1) return;
+    if (idx === -1) return { resetToLobby: false };
     const wasHost = this.players[idx].isHost;
     this.players.splice(idx, 1);
     if (wasHost && this.players.length > 0) this.players[0].isHost = true;
     if (this.players.length > 0) {
       this.turnOrder = this.turnOrder.filter((id) => id !== socketId);
       this.currentTurnIndex = this.currentTurnIndex % (this.turnOrder.length || 1);
+    }
+    // If the game was active and we no longer have enough players to continue,
+    // drop back to lobby instead of leaving the room in a broken state. The
+    // host keeps the room and can re-invite or wait for players to rejoin.
+    if (
+      this.players.length > 0 &&
+      this.players.length < 2 &&
+      (this.phase === 'playing' || this.phase === 'peek' || this.phase === 'dealing')
+    ) {
+      this.resetToLobby();
+      return { resetToLobby: true };
+    }
+    return { resetToLobby: false };
+  }
+
+  resetToLobby() {
+    this.phase = 'lobby';
+    this.deck = [];
+    this.discardPile = [];
+    this.turnOrder = [];
+    this.currentTurnIndex = 0;
+    this.peekEndsAt = null;
+    this.kaabooCallerId = null;
+    this._kaabooCallerWon = null;
+    this.finishedAt = null;
+    this.playdownWindow = null;
+    this.giveCardWindow = null;
+    this.powerWindow = null;
+    this._lastDiscard = null;
+    this.lastSwap = null;
+    this.lastReplace = null;
+    this.turnEndsAt = null;
+    this.lastAfkPenalty = null;
+    for (const p of this.players) {
+      p.grid = [];
+      p.hand = [];
+      p.score = 0;
+      p.sessionScoreBoard = 0;
     }
   }
 

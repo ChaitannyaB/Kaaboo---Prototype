@@ -12,6 +12,8 @@ import { SwapAnimOverlay, type SwapSlot } from './SwapAnimOverlay';
 import { GiveCardAnim, type GiveFromSlot, type GiveToSlot } from './GiveCardAnim';
 import { GameLog, type GameLogEntry } from './GameLog';
 import { DealAnimation } from './DealAnimation';
+import { ScoreBoardLeaderboard } from './ScoreBoardLeaderboard';
+import { HeaderOverflowMenu } from './HeaderOverflowMenu';
 import { useAuthStore } from '@/stores/authStore';
 import { useGameStore } from '@/stores/gameStore';
 import { useSocketStore, getSocket } from '@/stores/socketStore';
@@ -22,12 +24,6 @@ import type { Card as CardType, GameState, GridPosition } from '@/types/game';
 import type { ServerToClientEvents } from '@/types/socket';
 
 const POWER_RANK_SYMBOL: Record<string, string> = { '7': '7', '8': '8', '9': '9', '10': '10', J: 'J', Q: 'Q' };
-
-function ScoreBoardPip({ value }: { value: number }) {
-  const cls = value > 0 ? 'pos' : value < 0 ? 'neg' : 'neutral';
-  const label = value > 0 ? `+${value}` : String(value);
-  return <span className={`sb-pip sb-pip-${cls}`} title="Scoreboard">SB {label}</span>;
-}
 
 type PowerActionMode = null | 'peek-self' | 'peek-other' | 'peek-any' | 'swap-first';
 type DoublePowerPick = null | 'peek' | 'swap';
@@ -62,6 +58,7 @@ export function GamePage() {
   const [activePowerMode, setActivePowerMode] = useState<DoublePowerPick>(null);
   const [pendingSwap, setPendingSwap] = useState<{ ownerId: string; gridPosition: string }[]>([]);
   const [chatUnread, setChatUnread] = useState(0);
+  const [scorecardCollapsed, setScorecardCollapsed] = useState(false);
 
   const [peekReveal, setPeekReveal] = useState<{ card: CardType; ownerName: string } | null>(null);
   const [peekRevealExpiresAt, setPeekRevealExpiresAt] = useState<number | null>(null);
@@ -541,10 +538,16 @@ export function GamePage() {
         >
           💬{chatUnread > 0 && <span className="chat-unread-badge">{chatUnread}</span>}
         </button>
-        <button className="btn-ghost btn-rules-help" onClick={() => setRulesOpen(true)} title="Rules & Powers">?</button>
         <button className="btn-ghost btn-leave" onClick={handleLeave}>Leave</button>
-        <button className="btn-ghost" style={{ marginLeft: '6px' }} onClick={logout}>Log Out</button>
+        <HeaderOverflowMenu onOpenRules={() => setRulesOpen(true)} onLogout={logout} />
       </header>
+
+      <ScoreBoardLeaderboard
+        players={players}
+        myId={myId}
+        kaabooCallerId={kaabooCallerId}
+        hidden={isFinished}
+      />
 
       {kaabooCallerId && !isFinished && (
         <div className="kaaboo-active-banner">
@@ -637,7 +640,6 @@ export function GamePage() {
             {p.id === currentTurnPlayerId && phase === 'playing' && !playdownWindow && !giveCardWindow && !powerWindow && turnSecs > 0 && (
               <span className={`turn-countdown-badge${turnSecs <= 5 ? ' turn-countdown-urgent' : ''}`}>{turnSecs}s</span>
             )}
-            <ScoreBoardPip value={p.sessionScoreBoard ?? 0} />
           </div>
         ))}
       </div>
@@ -682,7 +684,6 @@ export function GamePage() {
             {amKaabooCallerBadge && <span className="kaaboo-caller-badge">★ KAABOO</span>}
             {me?.name ?? 'You'}{me?.isHost && ' 👑'}
           </span>
-          <ScoreBoardPip value={me?.sessionScoreBoard ?? 0} />
           {isPeek && <span className="peek-hint">Bottom cards visible for {peekSecs}s</span>}
           {!isPeek && myGridHint && <span className="action-hint">{myGridHint}</span>}
           {isMyTurn && phase === 'playing' && !playdownWindow && !giveCardWindow && !powerWindow && turnSecs > 0 && (
@@ -798,64 +799,79 @@ export function GamePage() {
       )}
 
       {isFinished && finalResult && (
-        <div className="gameover-overlay">
-          <div className="gameover-card">
-            <div className="gameover-title">★ KAABOO ★</div>
+        <div className={`gameover-sheet${scorecardCollapsed ? ' gameover-sheet-collapsed' : ''}`}>
+          <button
+            className="gameover-handle"
+            onClick={() => setScorecardCollapsed((v) => !v)}
+            aria-label={scorecardCollapsed ? 'Expand results' : 'Collapse results'}
+            title={scorecardCollapsed ? 'Expand results' : 'Collapse results'}
+          >
+            <span className="gameover-handle-pill" />
+            <span className="gameover-handle-label">
+              {scorecardCollapsed
+                ? `★ Results — tap to expand`
+                : `★ KAABOO Results`}
+            </span>
+            <span className="gameover-handle-caret">{scorecardCollapsed ? '▴' : '▾'}</span>
+          </button>
 
-            <div className={`gameover-result ${finalResult.kaabooCallerWon ? 'result-win' : 'result-lose'}`}>
-              <span className="result-icon">{finalResult.kaabooCallerWon ? '🏆' : '💔'}</span>
-              <div>
-                <div className="result-name">{playerName(finalResult.kaabooCallerId)}</div>
-                <div className="result-outcome">
-                  {finalResult.kaabooCallerWon
-                    ? 'called Kaaboo and WON! (+1 scoreboard)'
-                    : 'called Kaaboo but LOST. (-1 scoreboard)'}
+          {!scorecardCollapsed && (
+            <div className="gameover-sheet-body">
+              <div className={`gameover-result ${finalResult.kaabooCallerWon ? 'result-win' : 'result-lose'}`}>
+                <span className="result-icon">{finalResult.kaabooCallerWon ? '🏆' : '💔'}</span>
+                <div>
+                  <div className="result-name">{playerName(finalResult.kaabooCallerId)}</div>
+                  <div className="result-outcome">
+                    {finalResult.kaabooCallerWon
+                      ? 'called Kaaboo and WON! (+1 scoreboard)'
+                      : 'called Kaaboo but LOST. (-1 scoreboard)'}
+                  </div>
                 </div>
               </div>
-            </div>
 
-            <div className="score-table-wrap">
-            <table className="score-table">
-              <thead>
-                <tr>
-                  <th>Player</th>
-                  <th>Card Score</th>
-                  <th>Scoreboard</th>
-                </tr>
-              </thead>
-              <tbody>
-                {finalResult.scores.map((s, i) => (
-                  <tr key={s.id} className={[
-                    s.id === finalResult.kaabooCallerId && 'row-caller',
-                    i === 0 && 'row-lowest',
-                  ].filter(Boolean).join(' ')}>
-                    <td>
-                      {i === 0 && <span className="rank-star">★ </span>}
-                      {s.name}
-                      {s.id === finalResult.kaabooCallerId && (
-                        <span className="caller-tag"> (Kaaboo)</span>
-                      )}
-                    </td>
-                    <td className="score-num">{s.cardScore}</td>
-                    <td className={`score-board-num ${s.scoreBoard > 0 ? 'pos' : s.scoreBoard < 0 ? 'neg' : ''}`}>
-                      {s.scoreBoard > 0 ? `+${s.scoreBoard}` : s.scoreBoard}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            </div>
+              <div className="score-table-wrap">
+                <table className="score-table">
+                  <thead>
+                    <tr>
+                      <th>Player</th>
+                      <th>Card Score</th>
+                      <th>Scoreboard</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {finalResult.scores.map((s, i) => (
+                      <tr key={s.id} className={[
+                        s.id === finalResult.kaabooCallerId && 'row-caller',
+                        i === 0 && 'row-lowest',
+                      ].filter(Boolean).join(' ')}>
+                        <td>
+                          {i === 0 && <span className="rank-star">★ </span>}
+                          {s.name}
+                          {s.id === finalResult.kaabooCallerId && (
+                            <span className="caller-tag"> (Kaaboo)</span>
+                          )}
+                        </td>
+                        <td className="score-num">{s.cardScore}</td>
+                        <td className={`score-board-num ${s.scoreBoard > 0 ? 'pos' : s.scoreBoard < 0 ? 'neg' : ''}`}>
+                          {s.scoreBoard > 0 ? `+${s.scoreBoard}` : s.scoreBoard}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
 
-            <StatsPanel inline />
-
-            <div className="gameover-actions">
-              {me?.isHost ? (
-                <button className="btn-primary" onClick={restartGame}>Play Again</button>
-              ) : (
-                <span className="waiting-text">Waiting for host to restart…</span>
-              )}
-              <button className="btn-ghost" onClick={handleLeave}>Leave</button>
+              <StatsPanel inline />
             </div>
+          )}
+
+          <div className="gameover-actions gameover-actions-sticky">
+            {me?.isHost ? (
+              <button className="btn-primary" onClick={restartGame}>Play Again</button>
+            ) : (
+              <span className="waiting-text">Waiting for host to restart…</span>
+            )}
+            <button className="btn-ghost" onClick={handleLeave}>Leave</button>
           </div>
         </div>
       )}

@@ -66,11 +66,17 @@ export class GameGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
     const room = this.gameService.rooms.get(roomId);
     if (!room) return;
 
-    room.removePlayer(socket.id);
+    const result = room.removePlayer(socket.id);
     if (room.isEmpty()) {
       this.gameService.cleanupRoom(roomId);
       console.log(`[room] ${roomId} deleted (empty)`);
     } else {
+      if (result.resetToLobby) {
+        this.gameService.clearAllTimers(roomId);
+        this.gameService.roundStats.delete(roomId);
+        this.server.to(roomId).emit('room-reset', { reason: 'not-enough-players' });
+        console.log(`[room] ${roomId} reset to lobby (insufficient players)`);
+      }
       this.gameService.broadcastRoom(roomId);
     }
   }
@@ -86,13 +92,20 @@ export class GameGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
     socket.data.roomId = undefined;
     if (!room) return { ok: true };
 
-    room.removePlayer(socket.id);
+    const result = room.removePlayer(socket.id);
     console.log(`[room] ${socket.id} left ${roomId}`);
 
     if (room.isEmpty()) {
       this.gameService.cleanupRoom(roomId);
       console.log(`[room] ${roomId} deleted (empty)`);
       return { ok: true };
+    }
+
+    if (result.resetToLobby) {
+      this.gameService.clearAllTimers(roomId);
+      this.gameService.roundStats.delete(roomId);
+      this.server.to(roomId).emit('room-reset', { reason: 'not-enough-players' });
+      console.log(`[room] ${roomId} reset to lobby (insufficient players)`);
     }
 
     this.gameService.broadcastRoom(roomId);

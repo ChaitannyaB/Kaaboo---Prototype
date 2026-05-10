@@ -274,12 +274,16 @@ export class GameService implements OnApplicationShutdown {
     }
   }
 
-  cleanupRoom(roomId: string) {
+  clearAllTimers(roomId: string) {
     for (const map of [this.peekTimers, this.pdTimers, this.gcTimers, this.pdecTimers, this.pactTimers, this.turnTimers]) {
       const t = map.get(roomId);
       if (t) clearTimeout(t);
       map.delete(roomId);
     }
+  }
+
+  cleanupRoom(roomId: string) {
+    this.clearAllTimers(roomId);
     this.roundStats.delete(roomId);
     this.rooms.delete(roomId);
   }
