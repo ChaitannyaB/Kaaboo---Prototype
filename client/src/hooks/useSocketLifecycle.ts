@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { useSocketStore } from '@/stores/socketStore';
 import { useAuthStore } from '@/stores/authStore';
 import { useGameStore } from '@/stores/gameStore';
+import { useUiStore } from '@/stores/uiStore';
 import { friendsKeys } from '@/api/queries/friends';
 import { inviteKeys } from '@/api/queries/invites';
 import type { Friend } from '@/types/api';
@@ -89,6 +90,14 @@ export function useSocketLifecycle() {
     socket.on('friend-online', onFriendOnline);
     socket.on('friend-offline', onFriendOffline);
 
+    const onRoomReset = ({ reason }: { reason: string }) => {
+      const msg = reason === 'not-enough-players'
+        ? 'Game cancelled — not enough players. Back to lobby.'
+        : 'Game cancelled — back to lobby.';
+      useUiStore.getState().showFlash(msg);
+    };
+    socket.on('room-reset', onRoomReset);
+
     if (socket.connected) onConnect();
 
     return () => {
@@ -102,6 +111,7 @@ export function useSocketLifecycle() {
       socket.off('game-invite', onGameInvite);
       socket.off('friend-online', onFriendOnline);
       socket.off('friend-offline', onFriendOffline);
+      socket.off('room-reset', onRoomReset);
     };
   }, [token, socket, qc, navigate, setConnected, setMyId, setGameState, resetGame]);
 }

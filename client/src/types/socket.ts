@@ -10,6 +10,7 @@ export interface ServerToClientEvents {
   'game-invite': (data: { id: string; roomId: string; inviter: { id: string; username: string } }) => void;
   'friend-online': (data: { userId: string }) => void;
   'friend-offline': (data: { userId: string }) => void;
+  'room-reset': (data: { reason: string }) => void;
 }
 
 export type SocketCallback<T = unknown> = (res: T) => void;

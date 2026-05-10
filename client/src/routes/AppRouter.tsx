@@ -5,12 +5,15 @@ import { useAuthStore } from '@/stores/authStore';
 import { AuthPage } from '@/components/Auth';
 import { LobbyPage } from '@/components/Lobby';
 import { GamePage } from '@/components/GameBoard';
+import { FlashBanner } from '@/components/FlashBanner';
 
 export function AppRouter() {
   useSocketLifecycle();
   const token = useAuthStore((s) => s.token);
 
   return (
+    <>
+    <FlashBanner />
     <Routes>
       <Route
         path="/auth"
@@ -42,5 +45,6 @@ export function AppRouter() {
       />
       <Route path="*" element={<Navigate to="/lobby" replace />} />
     </Routes>
+    </>
   );
 }
